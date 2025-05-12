@@ -1,12 +1,13 @@
 import copy
 import time
 import platform
+from pathlib import Path
 from simplestochasticgame import *
 from shell_commands import run_command
+from settings import *
 
 
-def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, file_name: str = "", force: bool = False) -> (
-        tuple)[str, set]:
+def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False) -> tuple[str, set]:
     content = "smg\n\n"
 
     if version1:
@@ -227,14 +228,6 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, file_name:
     for vertex in ssg.vertices.values():
         if vertex.is_target:
             target_vertices.add(new_vertices[vertex])
-    if file_name:
-        if not file_name.endswith(".smg"):
-            print_warning("File is not an .smg file. Nothing was changed")
-        elif not force and os.path.exists(file_name) and os.path.getsize(file_name) != 0:
-            print_warning("File already exists. Nothing was changed")
-        else:
-            with open(file_name, "w", encoding="utf-8") as file:
-                file.write(content)
     return content, target_vertices
 
 
@@ -286,27 +279,19 @@ def convert_ssg_to_png(ssg_file, smg_file="", dot_file="", png_file="", ssg_to_s
                        create_png=False, open_png=True, print_target_probabilities=True, debug=False):
     if debug:
         start_time = time.time()
-    try:
-        with open("in_out_paths.txt", "r", encoding="utf-8") as file:
-            paths = file.readlines()
-    except FileNotFoundError:
-        print_error(f"File in_out_paths.txt not found.")
-    except Exception as e:
-        print_error(f"Could not read the file: {e}")
-    in_path = paths[0].replace("\n","").strip()
-    out_path = paths[1].replace("\n","").strip()
     if not smg_file:
-        smg_file = os.path.join(out_path, ssg_file.replace('.ssg', '.smg'))
+        smg_file = os.path.join(global_in_out_path, ssg_file.replace('.ssg', '.smg'))
     if create_png:
         if not dot_file:
-            dot_file = os.path.join(out_path, ssg_file.replace('.ssg', '.dot'))
+            dot_file = os.path.join(global_in_out_path, ssg_file.replace('.ssg', '.dot'))
         if not png_file:
-            png_file = os.path.join(out_path, ssg_file.replace('.ssg', '.png'))
-    ssg_file = os.path.join(in_path, ssg_file)
+            png_file = os.path.join(global_in_out_path, ssg_file.replace('.ssg', '.png'))
+    ssg_file = os.path.join(global_in_out_path, ssg_file)
     ssg = read_ssg_from_file(ssg_file)
     if debug:
         pre_smg_spec_time = time.time()
-    smg, target_vertices = ssg_to_smgspec(ssg=ssg, version1=ssg_to_smg_version1, file_name=smg_file, force=force)
+    smg, target_vertices = ssg_to_smgspec(ssg=ssg, version1=ssg_to_smg_version1)
+
     if debug:
         print(f"SMG spec created {(time.time() - pre_smg_spec_time):.6f}")
     if create_png:
@@ -362,3 +347,17 @@ def check_property(smg_file, property_string) -> float:
         return probability
     else:
         return -1.0
+
+def save_smg_file(content: str, file_name: str = "", force: bool = False):
+    if not file_name:
+        file_name = "out.smg"
+    file_name = os.path.join(global_in_out_path, file_name)
+    if not os.path.exists(os.path.dirname(file_name)):
+        os.makedirs(os.path.dirname(file_name))
+    if not file_name.endswith(".smg"):
+        print_warning("File is not an .smg file. Nothing was changed")
+    elif not force and os.path.exists(file_name) and os.path.getsize(file_name) != 0:
+        print_warning("File already exists. Nothing was changed")
+    else:
+        with open(file_name, "w", encoding="utf-8") as file:
+            file.write(content)

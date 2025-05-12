@@ -1,6 +1,7 @@
 import sys
 import re
 import os
+from settings import *
 from error_handling import print_warning, print_error, is_float_expr
 
 
@@ -96,6 +97,7 @@ def is_deadlock_vertex(vertex: SsgVertex, transitions: dict[(SsgVertex, str), Ss
 
 
 def read_ssg_from_file(file_name: str) -> SimpleStochasticGame:
+    file_name = os.path.join(global_in_out_path, file_name)
     if file_name[-4:] != ".ssg":
         print_error("Not a .ssg file")
     try:

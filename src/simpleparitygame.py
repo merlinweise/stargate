@@ -1,6 +1,7 @@
 import sys
 import re
 import os
+from settings import *
 from error_handling import print_warning, print_error, is_float_expr
 
 
@@ -118,6 +119,7 @@ def is_deadlock_vertex(vertex: SpgVertex, transitions: dict([((SpgVertex, str), 
 
 
 def read_spg_from_file(file_name: str) -> SimpleParityGame:
+    file_name = os.path.join(global_in_out_path, file_name)
     if file_name[-4:] != ".spg":
         print_error("Not a .spg file")
     try:
