@@ -1,11 +1,11 @@
 from fractions import Fraction
 from math import factorial
-from simple_parity_game import *
-from simple_stochastic_game import *
+from simpleparitygame import *
+from simplestochasticgame import *
 
 
 
-def max_denom_and_min_prob(spg: Simple_Parity_Game, max_d: int=10_000) -> (float, int):
+def max_denom_and_min_prob(spg: SimpleParityGame, max_d: int=10_000) -> (float, int):
     floats = set()
     for transition in spg.transitions.values():
         for prob, vert in transition.end_vertices:
@@ -13,7 +13,7 @@ def max_denom_and_min_prob(spg: Simple_Parity_Game, max_d: int=10_000) -> (float
     fractions = [Fraction(f).limit_denominator(max_d) for f in floats]
     return (min(floats), max(fr.denominator for fr in fractions))
 
-def compute_alphas_for_spg(spg: Simple_Parity_Game, max_d: int = 10_000):
+def compute_alphas_for_spg(spg: SimpleParityGame, max_d: int = 10_000):
     # ... delta_min_float, max_denominator_M, n_states, used wie vorher ...
     delta_min_float, max_denominator_M = max_denom_and_min_prob(spg, max_d)
     n_states = 10 #len(spg.vertices)
