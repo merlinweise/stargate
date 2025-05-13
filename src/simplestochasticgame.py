@@ -2,7 +2,7 @@ import sys
 import re
 import os
 from settings import *
-from error_handling import print_warning, print_error, is_float_expr
+from error_handling import print_warning, print_error, is_float_expr, print_debug, float_or_fraction
 
 
 class SsgVertex:
@@ -96,7 +96,7 @@ def is_deadlock_vertex(vertex: SsgVertex, transitions: dict[(SsgVertex, str), Ss
     return True
 
 
-def read_ssg_from_file(file_name: str) -> SimpleStochasticGame:
+def read_ssg_from_file(file_name) -> SimpleStochasticGame:
     file_name = os.path.join(global_in_out_path, file_name)
     if file_name[-4:] != ".ssg":
         print_error("Not a .ssg file")
@@ -268,7 +268,7 @@ def ssg_to_ssgspec(ssg: SimpleStochasticGame, file_name: str = "", force: bool =
         else:
             transition_str = f"\t{vert_act[0].name} {vert_act[1]} : "
             for end_vert in trans.end_vertices:
-                transition_str += f"{str(end_vert[0])} | {end_vert[1].name} + "
+                transition_str += f"{float_or_fraction(end_vert[0], 100000)} | {end_vert[1].name} + "
             transition_str = transition_str[:-3] + "\n"
             content += transition_str
     content += "endtransitions"
@@ -285,5 +285,7 @@ def ssg_to_ssgspec(ssg: SimpleStochasticGame, file_name: str = "", force: bool =
 
 
 def reformat_ssgspec(file_name: str):
+    file_name = os.path.join(global_in_out_path, file_name)
     ssg = read_ssg_from_file(file_name)
     ssg_to_ssgspec(ssg, file_name, True)
+
