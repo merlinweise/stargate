@@ -1,5 +1,4 @@
 import copy
-import time
 import platform
 from simplestochasticgame import *
 from shell_commands import run_command

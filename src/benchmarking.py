@@ -7,10 +7,15 @@ def create_random_ssgs(number_of_ssgs: int, number_of_vertices: int, number_of_t
     """
     Create a list of new SSGs with random parameters.
     :param number_of_ssgs: Number of SSGs to create
+    :type number_of_ssgs: int
     :param number_of_vertices: Maximum number of vertices in the SSG
+    :type number_of_vertices: int
     :param number_of_transitions: Maximum number of transitions in the SSG
+    :type number_of_transitions: int
     :param number_of_target_vertices: Maximum number of target vertices in the SSG
-    :return: List of new SSGs
+    :type number_of_target_vertices: int
+    :return: List of new random SSGs
+    :rtype: list
     """
     ssgs = []
     for _ in range(number_of_ssgs):
