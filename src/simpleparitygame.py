@@ -344,9 +344,9 @@ def save_spg_file(spg_spec: str, file_name: str = "", use_global_path: bool = Fa
     if not os.path.exists(os.path.dirname(file_name)):
         os.makedirs(os.path.dirname(file_name))
     if not file_name.endswith(".spg"):
-        print_warning("File is not an .spg file. Nothing was changed")
+        print_warning(f"File {file_name} is not an .spg file. Nothing was changed")
     elif not force and os.path.exists(file_name) and os.path.getsize(file_name) != 0:
-        print_warning("File already exists. Nothing was changed")
+        print_warning(f"File {file_name} already exists. Nothing was changed")
     else:
         with open(file_name, "w", encoding="utf-8") as file:
             file.write(spg_spec)
