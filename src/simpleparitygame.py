@@ -88,11 +88,11 @@ class SimpleParityGame:
         self.init_vertex = init_vertex
 
         for vertex in self.vertices.values():
-            if GLOBAL_DEBUG and print_vertex_creation_warnings and has_ingoing_transition(vertex, self.transitions):
+            if GLOBAL_DEBUG and PRINT_VERTEX_CREATION_WARNINGS and has_ingoing_transition(vertex, self.transitions):
                 print_debug(f"Vertex {vertex.name} has no ingoing transition.")
             if is_deadlock_vertex(vertex, self.transitions):
                 self.transitions[vertex, "selfloop"] = SpgTransition(vertex, {(1.0, vertex)}, "selfloop")
-                if GLOBAL_DEBUG and print_vertex_creation_warnings:
+                if GLOBAL_DEBUG and PRINT_VERTEX_CREATION_WARNINGS:
                     print_debug(f"Vertex {vertex.name} is a deadlock vertex. A selfloop was added.")
 
 
@@ -144,7 +144,7 @@ def read_spg_from_file(file_name: str, use_global_path: bool = False, debug: boo
     if debug:
         start_time = time.time()
     if use_global_path:
-        file_name = os.path.join(global_in_out_path, file_name)
+        file_name = os.path.join(GLOBAL_IN_OUT_PATH, file_name)
     if file_name[-4:] != ".spg":
         print_error("Not a .spg file")
     try:
@@ -351,7 +351,7 @@ def save_spg_file(spg_spec: str, file_name: str = "", use_global_path: bool = Fa
     if not file_name:
         file_name = "out.spg"
     if use_global_path:
-        file_name = os.path.join(global_in_out_path, file_name)
+        file_name = os.path.join(GLOBAL_IN_OUT_PATH, file_name)
     if not os.path.exists(os.path.dirname(file_name)):
         os.makedirs(os.path.dirname(file_name))
     if not file_name.endswith(".spg"):
@@ -380,7 +380,7 @@ def reformat_spgspec(file_name: str, use_global_path: bool = False, force: bool 
     if debug:
         start_time = time.time()
     if use_global_path:
-        file_name = os.path.join(global_in_out_path, file_name)
+        file_name = os.path.join(GLOBAL_IN_OUT_PATH, file_name)
     spg = read_spg_from_file(file_name=file_name, use_global_path=use_global_path, debug=False)
     content = spg_to_spgspec(spg)
     save_spg_file(spg_spec=content, file_name=file_name, use_global_path=use_global_path, force=force, debug=False)

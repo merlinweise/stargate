@@ -290,9 +290,9 @@ def sanity_check_alternating_verts(ssg: SimpleStochasticGame) -> bool:
 def check_property(smg_file, property_string, debug: bool = GLOBAL_DEBUG) -> float:
     if debug:
         start_time = time.time()
-    smg_file = os.path.join(global_in_out_path, smg_file)
+    smg_file = os.path.join(GLOBAL_IN_OUT_PATH, smg_file)
     command = ["prism", smg_file, "-pf", property_string]
-    result = run_command(command, use_shell=True)
+    result = run_command(command, use_shell=True, )
     output = result.stdout
     match = re.search(r'Result:\s*(\d\.\d+(E-\d+)?)', output)
     if match:
@@ -310,7 +310,7 @@ def check_target_reachability(smg_file: str, print_probabilities: bool = False, 
     if debug:
         start_time = time.time()
     if use_global_path:
-        smg_file = os.path.join(global_in_out_path, smg_file)
+        smg_file = os.path.join(GLOBAL_IN_OUT_PATH, smg_file)
     if debug:
         pre_prob1_time = time.time()
     result1 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmin=? [F \"\"target\"\"]", debug=debug)
@@ -342,7 +342,7 @@ def save_smg_file(content: str, file_name: str = "", force: bool = False, debug:
     if not file_name:
         file_name = "out.smg"
     if use_global_path:
-        file_name = os.path.join(global_in_out_path, file_name)
+        file_name = os.path.join(GLOBAL_IN_OUT_PATH, file_name)
     if not os.path.exists(os.path.dirname(file_name)):
         os.makedirs(os.path.dirname(file_name))
     if not file_name.endswith(".smg"):
@@ -360,9 +360,11 @@ def create_dot_file(smg_file: str, dot_file: str = "", force: bool = False, debu
     if debug:
         start_time = time.time()
     if use_global_path:
-        smg_file = os.path.join(global_in_out_path, smg_file)
+        smg_file = os.path.join(GLOBAL_IN_OUT_PATH, smg_file)
     if not dot_file:
         dot_file = smg_file.replace(".smg", ".dot")
+    if use_global_path:
+        dot_file = os.path.join(GLOBAL_IN_OUT_PATH, dot_file)
     if not force and os.path.exists(dot_file) and os.path.getsize(dot_file) != 0:
         print_warning("DOT file already exists. Nothing was changed")
     else:
@@ -375,9 +377,11 @@ def create_png_file(dot_file: str, png_file: str = "", open_png: bool = False, f
     if debug:
         start_time = time.time()
     if use_global_path:
-        dot_file = os.path.join(global_in_out_path, dot_file)
+        dot_file = os.path.join(GLOBAL_IN_OUT_PATH, dot_file)
     if not png_file:
         png_file = dot_file.replace(".dot", ".png")
+    if use_global_path:
+        png_file = os.path.join(GLOBAL_IN_OUT_PATH, png_file)
     if not force and os.path.exists(png_file) and os.path.getsize(png_file) != 0:
         print_warning(f"PNG file {png_file} already exists. Nothing was changed")
     else:

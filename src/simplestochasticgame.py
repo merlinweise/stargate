@@ -60,7 +60,7 @@ class SsgTransition:
             if prob < 0:
                 neg_probs = True
             total_prob += prob
-        if total_prob != 1:
+        if abs(total_prob-1) > 0.0001:
             print_warning(f"Sum ({total_prob}) of probabilities does not equal 1 of edge from {self.start_vertex.name} with action {self.action}")
         if neg_probs:
             print_warning(f"There is at least one probability that is negative of edge from {self.start_vertex.name} with action {self.action}")
@@ -95,11 +95,11 @@ class SimpleStochasticGame:
         self.init_vertex = init_vertex
 
         for vertex in self.vertices.values():
-            if GLOBAL_DEBUG and print_vertex_creation_warnings and not has_ssg_vertex_ingoing_transition(vertex, self.transitions):
+            if GLOBAL_DEBUG and PRINT_VERTEX_CREATION_WARNINGS and not has_ssg_vertex_ingoing_transition(vertex, self.transitions):
                 print_debug(f"Vertex {vertex.name} has no ingoing transition.")
             if is_deadlock_vertex(vertex, self.transitions):
                 self.transitions[vertex, "selfloop"] = SsgTransition(vertex, {(1.0, vertex)}, "selfloop")
-                if GLOBAL_DEBUG and print_vertex_creation_warnings:
+                if GLOBAL_DEBUG and PRINT_VERTEX_CREATION_WARNINGS:
                     print_debug(f"Vertex {vertex.name} is a deadlock vertex. A selfloop was added.")
 
     def add_extra_vert(self, is_eve: bool, is_target: bool = False) -> SsgVertex:
@@ -179,7 +179,7 @@ def read_ssg_from_file(file_name, use_global_path: bool = False, debug: bool = G
     if debug:
         start_time = time.time()
     if use_global_path:
-        file_name = os.path.join(global_in_out_path, file_name)
+        file_name = os.path.join(GLOBAL_IN_OUT_PATH, file_name)
     if file_name[-4:] != ".ssg":
         print_error("Not a .ssg file")
     try:
@@ -378,7 +378,7 @@ def save_ssg_file(ssg_spec: str, file_name: str = "", use_global_path: bool = Fa
     if not file_name:
         file_name = "out.ssg"
     if use_global_path:
-        file_name = os.path.join(global_in_out_path, file_name)
+        file_name = os.path.join(GLOBAL_IN_OUT_PATH, file_name)
     if not os.path.exists(os.path.dirname(file_name)):
         os.makedirs(os.path.dirname(file_name))
     if not file_name.endswith(".ssg"):
@@ -407,7 +407,7 @@ def reformat_ssgspec(file_name: str, use_global_path: bool = False, force: bool 
     if debug:
         start_time = time.time()
     if use_global_path:
-        file_name = os.path.join(global_in_out_path, file_name)
+        file_name = os.path.join(GLOBAL_IN_OUT_PATH, file_name)
     ssg = read_ssg_from_file(file_name=file_name, use_global_path=use_global_path, debug=False)
     content = ssg_to_ssgspec(ssg)
     save_ssg_file(ssg_spec=content, file_name=file_name, use_global_path=use_global_path, force=force, debug=False)
