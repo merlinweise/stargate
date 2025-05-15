@@ -1,8 +1,6 @@
 from fractions import Fraction
 from math import factorial
-from simpleparitygame import *
-from simplestochasticgame import *
-
+from settings import *
 
 
 def max_denom_and_min_prob(spg: SimpleParityGame, max_d: int=10_000) -> (float, int):

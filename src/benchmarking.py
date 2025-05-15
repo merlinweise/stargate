@@ -1,10 +1,9 @@
 import random
-from settings import *
-from simplestochasticgame import *
 from ssg_to_smg import *
+from error_handling import print_error, print_debug
 
 
-def create_random_ssg(number_of_vertices: int, number_of_transitions: int, number_of_target_vertices: int) -> SimpleStochasticGame:
+def create_random_ssg(number_of_vertices: int, number_of_transitions: int, number_of_target_vertices: int, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
     """
     Create a new SSG with random parameters.
     :param number_of_vertices: Maximum number of vertices in the SSG
@@ -13,9 +12,13 @@ def create_random_ssg(number_of_vertices: int, number_of_transitions: int, numbe
     :type number_of_transitions: int
     :param number_of_target_vertices: Maximum number of target vertices in the SSG
     :type number_of_target_vertices: int
+    :param debug: Whether to print debug information
+    :type debug: bool
     :return: SSG with random parameters
     :rtype: SimpleStochasticGame
     """
+    if debug:
+        start_time = time.time()
     vertices: dict[str, SsgVertex] = dict()
     for i in range(number_of_vertices):
         vertices[f"vertex_{i}"] = SsgVertex(f"vertex_{i}", bool(random.randint(0, 1)), False)
@@ -34,19 +37,25 @@ def create_random_ssg(number_of_vertices: int, number_of_transitions: int, numbe
         else:
             end_vertices = random.sample(list(vertices.values()), 2)
             transitions[(start_vertex, str(action))] = SsgTransition(start_vertex, {(0.5, end_vertices[0]), (0.5, end_vertices[1])}, str(action))
+    if debug:
+        print_debug(f"Created random SSG with {len(vertices)} vertices and {len(transitions)} transitions in {time.time() - start_time:.2f} seconds.")
     return SimpleStochasticGame(vertices, transitions, init_vertex)
 
 
-def create_binary_tree_ssg(number_of_layers: int, share_of_target_vertices: float) -> SimpleStochasticGame:
+def create_binary_tree_ssg(number_of_layers: int, share_of_target_vertices: float, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
     """
     Create a binary tree SSG with the given number of layers and target vertices.
     :param number_of_layers: Number of layers in the binary tree
     :type number_of_layers: int
     :param share_of_target_vertices: Share of target vertices in the binary tree
     :type share_of_target_vertices: float
+    :param debug: Whether to print debug information
+    :type debug: bool
     :return: Binary tree SSG
     :rtype: SimpleStochasticGame
     """
+    if debug:
+        start_time = time.time()
     vertices = {}
     transitions = {}
     leaves = []
@@ -72,17 +81,20 @@ def create_binary_tree_ssg(number_of_layers: int, share_of_target_vertices: floa
     for vertex in target_vertices:
         vertex.is_target = True
     init_vertex = vertices["layer_0_vertex_0"]
-
+    if debug:
+        print_debug(f"Created binary tree SSG with {len(vertices)} vertices and {len(transitions)} transitions in {time.time() - start_time:.2f} seconds.")
     return SimpleStochasticGame(vertices, transitions, init_vertex)
 
 
-def create_complete_graph_ssg(number_of_vertices: int, number_of_target_vertices: int) -> SimpleStochasticGame:
+def create_complete_graph_ssg(number_of_vertices: int, number_of_target_vertices: int, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
     """
     Create a complete graph SSG with the given number of vertices and target vertices.
     :param number_of_vertices: Number of vertices in the SSG
     :type number_of_vertices: int
     :param number_of_target_vertices: Number of target vertices in the SSG
     :type number_of_target_vertices: int
+    :param debug: Whether to print debug information
+    :type debug: bool
     :return: Complete graph SSG
     :rtype: SimpleStochasticGame
     """
@@ -97,21 +109,26 @@ def create_complete_graph_ssg(number_of_vertices: int, number_of_target_vertices
         for vertex in target_vertices:
             vertex.is_target = True
             transitions[(vertices[vertex_name], "a")] = SsgTransition(vertices[vertex_name], {(1.0/number_of_vertices, vertices[end_vertex_name]) for end_vertex_name in vertices}, "a")
-
-
     init_vertex = vertices["vertex_0"]
-
+    if debug:
+        print_debug(f"Created complete graph SSG with {len(vertices)} vertices and {len(transitions)} transitions.")
     return SimpleStochasticGame(vertices, transitions, init_vertex)
 
 
-def create_chain_ssg(number_of_vertices: int) -> SimpleStochasticGame:
+def create_chain_ssg(number_of_vertices: int, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
     """
     Create a chain SSG with the given number of vertices.
     :param number_of_vertices: Number of vertices in the SSG
     :type number_of_vertices: int
+    :param debug: Whether to print debug information
+    :type debug: bool
     :return: Chain SSG
     :rtype: SimpleStochasticGame
     """
+    if debug is None:
+        debug = GLOBAL_DEBUG
+    if debug:
+        start_time = time.time()
     vertices = {}
     transitions = {}
     for i in range(number_of_vertices):
@@ -126,18 +143,23 @@ def create_chain_ssg(number_of_vertices: int) -> SimpleStochasticGame:
             transitions[(vertices[f"vertex_{i-1}"], "a")] = SsgTransition(vertices[f"vertex_{i-1}"], {(0.5, vertices[vertex_name]), (0.5, vertices["vertex_0"])}, "a")
 
     init_vertex = vertices["vertex_0"]
-
+    if debug:
+        print_debug(f"Created chain SSG with {len(vertices)} vertices and {len(transitions)} transitions in {time.time() - start_time:.2f} seconds.")
     return SimpleStochasticGame(vertices, transitions, init_vertex)
 
 
-def create_empty_ssg(number_of_vertices: int) -> SimpleStochasticGame:
+def create_empty_ssg(number_of_vertices: int, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
     """
     Create an empty SSG with the given number of vertices.
     :param number_of_vertices: Number of vertices in the SSG
     :type number_of_vertices: int
+    :param debug: Whether to print debug information
+    :type debug: bool
     :return: Empty SSG
     :rtype: SimpleStochasticGame
     """
+    if debug:
+        start_time = time.time()
     vertices = {}
     transitions = {}
     for i in range(number_of_vertices):
@@ -147,13 +169,14 @@ def create_empty_ssg(number_of_vertices: int) -> SimpleStochasticGame:
             vertices[vertex_name].is_eve = True
 
     init_vertex = vertices["vertex_0"]
-
+    if debug:
+        print_debug(f"Created empty SSG with {len(vertices)} vertices and {len(transitions)} transitions in {time.time() - start_time:.2f} seconds.")
     return SimpleStochasticGame(vertices, transitions, init_vertex)
 
 
-def check_smg_stats(smg_file: str, debug: bool = False, use_global_path: bool = False) -> tuple[int, int, float]:
+def check_smg_stats(smg_file: str, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False) -> tuple[int, int, float]:
     """
-    Check the statistics of a SMG file.
+    Check the statistics of an SMG file.
     :param smg_file: Path to the SMG file
     :type smg_file: str
     :param debug: Whether to print debug information
@@ -182,7 +205,7 @@ def check_smg_stats(smg_file: str, debug: bool = False, use_global_path: bool = 
     return states, transitions, constr_time
 
 
-def print_smg_stats(smg_file: str, debug: bool = False, use_global_path: bool = False) -> None:
+def print_smg_stats(smg_file: str, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False) -> None:
     """
     Print the statistics of an SMG file.
     :param smg_file: Path to the SMG file
@@ -209,15 +232,10 @@ def print_smg_stats(smg_file: str, debug: bool = False, use_global_path: bool = 
     print(output)
 
 
-ssg = create_empty_ssg(10000)
+ssg = create_empty_ssg(100000)
 smg = ssg_to_smgspec(ssg, version1=True)
-save_smg_file(smg, "empty_10000.smg", use_global_path=True, force=True)
-print_smg_stats("empty_10000.smg", debug=False, use_global_path=True)
-check_target_reachability("empty_10000.smg", print_probabilities=True, debug=False, use_global_path=True)
-create_dot_file("empty_10000.smg", debug=False, use_global_path=True, force=True)
-create_png_file("empty_10000.dot", debug=False, use_global_path=True, force=True, open_png=True)
-
-
-
-
-
+save_smg_file(smg, "empty_100000.smg", use_global_path=True, force=True)
+print_smg_stats("empty_100000.smg",  use_global_path=True)
+check_target_reachability("empty_10000.smg", print_probabilities=True, use_global_path=True)
+create_dot_file("empty_100000.smg", use_global_path=True, force=True)
+create_png_file("empty_100000.dot", use_global_path=True, force=True, open_png=True)

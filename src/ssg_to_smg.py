@@ -1,11 +1,17 @@
 import copy
 import platform
-from simplestochasticgame import *
+import time
+import re
+import os
+from simplestochasticgame import SimpleStochasticGame, SsgTransition, SsgVertex
 from shell_commands import run_command
+from error_handling import print_warning, print_debug
 from settings import *
 
 
-def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False) -> str:
+def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: bool = GLOBAL_DEBUG) -> str:
+    if debug:
+        start_time = time.time()
     content = "smg\n\n"
     if version1:
         ssg = copy.deepcopy(ssg)
@@ -23,10 +29,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False) -> str:
                 extra_adam_act = f"extra_adam_action{i}"
                 break
         additional_ssg_transitions = dict()
-        t = 0
         for transition in ssg.transitions.values():
-            t += 1
-            print(t)
             if len(transition.end_vertices) == 1:
                 if transition.start_vertex.is_eve and next(iter(transition.end_vertices))[1].is_eve:
                     new_trans_vert = ssg.add_extra_vert(False)
@@ -105,10 +108,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False) -> str:
         content += "\nendplayer\n\n"
         eve_mod = f"module evemod\n\tes : [0..{eve_vert_count-1}] init {new_init_vertex[0]} ;\n"
         adam_mod = f"module adammod\n\tas : [0..{adam_vert_count-1}] init {new_init_vertex[1]} ;\n"
-        t=0
         for transition in new_transitions:
-            t+=1
-            print(t)
             if transition.start_vertex.is_eve:
                 eve_mod += f"\t[{new_eve_actions[transition.action]}] (es={new_transitions[transition][0][0]} & as={new_transitions[transition][0][1]}) \t-> (es'=0) ;\n"
                 if len(transition.end_vertices) == 1:
@@ -238,6 +238,8 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False) -> str:
         content = content[:-1] + "false;"
     else:
         content = content[:-3] + ");"
+    if debug:
+        print_debug(f"SMG specification created in {(time.time() - start_time):.6f} seconds with version {1 if version1 else 2}")
     return content
 
 
@@ -285,7 +287,7 @@ def sanity_check_alternating_verts(ssg: SimpleStochasticGame) -> bool:
     return result
 
 
-def check_property(smg_file, property_string, debug: bool = False) -> float:
+def check_property(smg_file, property_string, debug: bool = GLOBAL_DEBUG) -> float:
     if debug:
         start_time = time.time()
     smg_file = os.path.join(global_in_out_path, smg_file)
@@ -304,12 +306,11 @@ def check_property(smg_file, property_string, debug: bool = False) -> float:
         return -1.0
 
 
-def check_target_reachability(smg_file: str, print_probabilities: bool = False, debug: bool = False, use_global_path: bool = False) -> str:
+def check_target_reachability(smg_file: str, print_probabilities: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False) -> str:
     if debug:
         start_time = time.time()
     if use_global_path:
         smg_file = os.path.join(global_in_out_path, smg_file)
-    result = ""
     if debug:
         pre_prob1_time = time.time()
     result1 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmin=? [F \"\"target\"\"]", debug=debug)
@@ -330,10 +331,12 @@ def check_target_reachability(smg_file: str, print_probabilities: bool = False, 
         result += f"Maximum probability of reaching a target state for eve: {str(result2)}"
     if print_probabilities:
         print(result)
+    if debug:
+        print_debug(f"Target reachability check completed in {(time.time() - start_time):.6f} seconds")
     return result
 
 
-def save_smg_file(content: str, file_name: str = "", force: bool = False, debug: bool = False, use_global_path: bool = False):
+def save_smg_file(content: str, file_name: str = "", force: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False):
     if debug:
         start_time = time.time()
     if not file_name:
@@ -353,7 +356,7 @@ def save_smg_file(content: str, file_name: str = "", force: bool = False, debug:
         print_debug(f"SMG file {file_name} created in {(time.time() - start_time):.6f} seconds")
 
 
-def create_dot_file(smg_file: str, dot_file: str = "", force: bool = False, debug: bool = False, use_global_path: bool = False):
+def create_dot_file(smg_file: str, dot_file: str = "", force: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False):
     if debug:
         start_time = time.time()
     if use_global_path:
@@ -368,7 +371,7 @@ def create_dot_file(smg_file: str, dot_file: str = "", force: bool = False, debu
         print_debug(f"DOT file {dot_file} created in {(time.time() - start_time):.6f} seconds")
 
 
-def create_png_file(dot_file: str, png_file: str = "", open_png: bool = False, force: bool = False, debug: bool = False, use_global_path: bool = False):
+def create_png_file(dot_file: str, png_file: str = "", open_png: bool = False, force: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False):
     if debug:
         start_time = time.time()
     if use_global_path:
@@ -384,3 +387,5 @@ def create_png_file(dot_file: str, png_file: str = "", open_png: bool = False, f
             run_command(["start", png_file], use_shell=True, debug=debug)
         elif platform.system() == "Linux":
             run_command(["xdg-open", png_file], use_shell=True, debug=debug)
+    if debug:
+        print_debug(f"PNG file {png_file} created in {(time.time() - start_time):.6f} seconds")

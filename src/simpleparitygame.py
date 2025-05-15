@@ -1,8 +1,7 @@
-import sys
 import re
 import os
 import time
-from settings import *
+from src.settings import *
 from error_handling import print_warning, print_error, print_debug, is_float_expr, float_or_fraction
 
 
@@ -89,11 +88,12 @@ class SimpleParityGame:
         self.init_vertex = init_vertex
 
         for vertex in self.vertices.values():
-            if not has_ingoing_transition(vertex, self.transitions):
-                print_warning(f"Vertex {vertex.name} has no ingoing transition")
+            if GLOBAL_DEBUG and print_vertex_creation_warnings and has_ingoing_transition(vertex, self.transitions):
+                print_debug(f"Vertex {vertex.name} has no ingoing transition.")
             if is_deadlock_vertex(vertex, self.transitions):
-                print_warning(f"Vertex {vertex.name} is a deadlock vertex")
                 self.transitions[vertex, "selfloop"] = SpgTransition(vertex, {(1.0, vertex)}, "selfloop")
+                if GLOBAL_DEBUG and print_vertex_creation_warnings:
+                    print_debug(f"Vertex {vertex.name} is a deadlock vertex. A selfloop was added.")
 
 
 def has_ingoing_transition(vertex: SpgVertex, transitions: dict[(SpgVertex, str), SpgTransition]) -> bool:
@@ -129,16 +129,20 @@ def is_deadlock_vertex(vertex: SpgVertex, transitions: dict[(SpgVertex, str), Sp
     return True
 
 
-def read_spg_from_file(file_name: str, use_global_path: bool = False) -> SimpleParityGame:
+def read_spg_from_file(file_name: str, use_global_path: bool = False, debug: bool = GLOBAL_DEBUG) -> SimpleParityGame:
     """
     Reads a simple parity game from a file and returns the corresponding SimpleParityGame object.
     :param file_name: Path to the file that is joined with the global_in_out_path
     :type file_name: str
     :param use_global_path: If True, the file_name is joined with the global_in_out_path
     :type use_global_path: bool
+    :param debug: True if debug information should be printed
+    :type debug: bool
     :return: SimpleParityGame object
     :rtype: SimpleParityGame
     """
+    if debug:
+        start_time = time.time()
     if use_global_path:
         file_name = os.path.join(global_in_out_path, file_name)
     if file_name[-4:] != ".spg":
@@ -283,18 +287,23 @@ def read_spg_from_file(file_name: str, use_global_path: bool = False) -> SimpleP
                     f"File does not comply with spg specification. Line {current_line_index + 1}: {content[current_line_index]}")
             case _:
                 print_error("Undefined state")
-                sys.exit(1)
+    if debug:
+        print_debug(f"SPG file {file_name} read in {(time.time() - start_time):.6f} seconds")
     return SimpleParityGame(spg_vertices, spg_transitions, spg_initial_vertex)
 
 
-def spg_to_spgspec(spg: SimpleParityGame) -> str:
+def spg_to_spgspec(spg: SimpleParityGame, debug: bool = GLOBAL_DEBUG) -> str:
     """
     Converts a SimpleParityGame object to a string representation in the spg specification format.
     :param spg: The SimpleParityGame object to convert
     :type spg: SimpleParityGame
+    :param debug: True if debug information should be printed
+    :type debug: bool
     :return: SPG specification string
     :rtype: str
     """
+    if debug:
+        start_time = time.time()
     content = "spg\n\n"
     eve_vertices = "evevertices\n"
     adam_vertices = "adamvertices\n"
@@ -318,10 +327,12 @@ def spg_to_spgspec(spg: SimpleParityGame) -> str:
             transition_str = transition_str[:-3] + "\n"
             content += transition_str
     content += "endtransitions"
+    if debug:
+        print_debug(f"SPG specification created in {(time.time() - start_time):.6f} seconds")
     return content
 
 
-def save_spg_file(spg_spec: str, file_name: str = "", use_global_path: bool = False, force: bool = False, debug: bool = False):
+def save_spg_file(spg_spec: str, file_name: str = "", use_global_path: bool = False, force: bool = False, debug: bool = GLOBAL_DEBUG):
     """
     Saves the given content to a file with the given name. If the file already exists and force is not set to True, nothing is changed.
     :param spg_spec: SPG specification to save
@@ -354,7 +365,7 @@ def save_spg_file(spg_spec: str, file_name: str = "", use_global_path: bool = Fa
         print_debug(f"SPG file {file_name} created in {(time.time() - start_time):.6f} seconds")
 
 
-def reformat_spgspec(file_name: str, use_global_path: bool = False, force: bool = False):
+def reformat_spgspec(file_name: str, use_global_path: bool = False, force: bool = False, debug: bool = GLOBAL_DEBUG):
     """
     Reformats the given SPG specification file to the default format.
     :param file_name: Name of the file to reformat
@@ -363,9 +374,15 @@ def reformat_spgspec(file_name: str, use_global_path: bool = False, force: bool 
     :type use_global_path: bool
     :param force: True if the file should be overwritten if it already exists
     :type force: bool
+    :param debug: True if debug information should be printed
+    :type debug: bool
     """
+    if debug:
+        start_time = time.time()
     if use_global_path:
         file_name = os.path.join(global_in_out_path, file_name)
-    spg = read_spg_from_file(file_name)
+    spg = read_spg_from_file(file_name=file_name, use_global_path=use_global_path, debug=False)
     content = spg_to_spgspec(spg)
-    save_spg_file(spg_spec=content, file_name=file_name, force=force)
+    save_spg_file(spg_spec=content, file_name=file_name, use_global_path=use_global_path, force=force, debug=False)
+    if debug:
+        print_debug(f"SPG file {file_name} reformatted in {(time.time() - start_time):.6f} seconds")

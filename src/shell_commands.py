@@ -1,16 +1,17 @@
 import subprocess
 from error_handling import print_error
+from settings import *
 
 
-def run_command(command_list, use_shell=False, debug=False):
+def run_command(command_list, use_shell=False, debug=GLOBAL_DEBUG):
     try:
         if use_shell:
             command = " ".join(f'"{arg}"' if " " in arg else arg for arg in command_list)
             result = subprocess.run(command, shell=True, capture_output=True, text=True, check=True)
         else:
             result = subprocess.run(command_list, shell=False, capture_output=True, text=True, check=True)
-        # if debug:
-            # print(result.stdout)
+        if debug:
+            print(result.stdout)
         return result
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         print_error(f"Could not execute command {' '.join(command_list)}.")

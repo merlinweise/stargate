@@ -95,11 +95,12 @@ class SimpleStochasticGame:
         self.init_vertex = init_vertex
 
         for vertex in self.vertices.values():
-            if not has_ssg_vertex_ingoing_transition(vertex, self.transitions):
-                print_warning(f"Vertex {vertex.name} has no ingoing transition")
+            if GLOBAL_DEBUG and print_vertex_creation_warnings and not has_ssg_vertex_ingoing_transition(vertex, self.transitions):
+                print_debug(f"Vertex {vertex.name} has no ingoing transition.")
             if is_deadlock_vertex(vertex, self.transitions):
-                print_warning(f"Vertex {vertex.name} is a deadlock vertex")
                 self.transitions[vertex, "selfloop"] = SsgTransition(vertex, {(1.0, vertex)}, "selfloop")
+                if GLOBAL_DEBUG and print_vertex_creation_warnings:
+                    print_debug(f"Vertex {vertex.name} is a deadlock vertex. A selfloop was added.")
 
     def add_extra_vert(self, is_eve: bool, is_target: bool = False) -> SsgVertex:
         """
@@ -163,16 +164,20 @@ def is_deadlock_vertex(vertex: SsgVertex, transitions: dict[(SsgVertex, str), Ss
     return True
 
 
-def read_ssg_from_file(file_name, use_global_path: bool = False) -> SimpleStochasticGame:
+def read_ssg_from_file(file_name, use_global_path: bool = False, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
     """
     Reads a simple stochastic game from a file and returns the corresponding SimpleStochasticGame object.
     :param file_name: Path to the file that is joined with the global global_in_out_path
     :type file_name: str
     :param use_global_path: If True, the file name is joined with the global global_in_out_path
     :type use_global_path: bool
+    :param debug: True if debug information should be printed
+    :type debug: bool
     :return: SimpleStochasticGame object
     :rtype: SimpleStochasticGame
     """
+    if debug:
+        start_time = time.time()
     if use_global_path:
         file_name = os.path.join(global_in_out_path, file_name)
     if file_name[-4:] != ".ssg":
@@ -194,8 +199,6 @@ def read_ssg_from_file(file_name, use_global_path: bool = False) -> SimpleStocha
     ssg_transitions = dict()
     for current_line_index in range(1, len(content)):
         current_line = re.split(r"\s+", content[current_line_index].replace("\t", " ").replace("\n", " ").replace(":", " : ").replace("|", " | ").replace("+", " + ").strip())
-        # print(current_line)
-
         match state:
             case 0:
                 if current_line == [""]:
@@ -243,13 +246,11 @@ def read_ssg_from_file(file_name, use_global_path: bool = False) -> SimpleStocha
                     if current_line[0] in ssg_vertices:
                         print_error(f"Duplicate vertex {current_line[0]}")
                     ssg_vertices[current_line[0]] = SsgVertex(current_line[0], False, False)
-                    # print(ssg_vertices[current_line[0]])
                     continue
                 if (current_line[1] == "T" or current_line[1] == "t") and len(current_line) == 2:
                     if current_line[0] in ssg_vertices:
                         print_error(f"Duplicate vertex {current_line[0]}")
                     ssg_vertices[current_line[0]] = SsgVertex(current_line[0], False, True)
-                    # print(ssg_vertices[current_line[0]])
                     continue
                 print_error(
                     f"File does not comply with ssg specification. Line {current_line_index + 1}: {content[current_line_index]}")
@@ -261,7 +262,6 @@ def read_ssg_from_file(file_name, use_global_path: bool = False) -> SimpleStocha
                     if current_line[2] not in ssg_vertices:
                         print_error(f"Initial vertex {current_line[2]} was not declared before")
                     ssg_initial_vertex = ssg_vertices[current_line[2]]
-                    # print(ssg_inital_vertex)
                     state = 5
                     continue
                 print_error(f"File does not comply with ssg specification. Line {current_line_index + 1}: {content[current_line_index]}")
@@ -316,6 +316,8 @@ def read_ssg_from_file(file_name, use_global_path: bool = False) -> SimpleStocha
             case _:
                 print_error("Undefined state")
                 sys.exit(1)
+    if debug:
+        print_debug(f"SSG file {file_name} read in {(time.time() - start_time):.6f} seconds")
     return SimpleStochasticGame(ssg_vertices, ssg_transitions, ssg_initial_vertex)
 
 
@@ -357,7 +359,7 @@ def ssg_to_ssgspec(ssg: SimpleStochasticGame) -> str:
     return content
 
 
-def save_ssg_file(ssg_spec: str, file_name: str = "", use_global_path: bool = False, force: bool = False, debug: bool = False):
+def save_ssg_file(ssg_spec: str, file_name: str = "", use_global_path: bool = False, force: bool = False, debug: bool = GLOBAL_DEBUG):
     """
     Saves the given content to a file with the given name. If the file already exists and force is not set to True, nothing is changed.
     :param ssg_spec: SSG specification to save
@@ -390,7 +392,7 @@ def save_ssg_file(ssg_spec: str, file_name: str = "", use_global_path: bool = Fa
         print_debug(f"SSG file {file_name} created in {(time.time() - start_time):.6f} seconds")
 
 
-def reformat_ssgspec(file_name: str, use_global_path: bool = False, force: bool = False):
+def reformat_ssgspec(file_name: str, use_global_path: bool = False, force: bool = False, debug: bool = GLOBAL_DEBUG):
     """
     Reformats the SSG specification file to the default format.
     :param file_name: Name of the file to reformat
@@ -399,9 +401,15 @@ def reformat_ssgspec(file_name: str, use_global_path: bool = False, force: bool 
     :type use_global_path: bool
     :param force: True if the file should be overwritten if it already exists
     :type force: bool
+    :param debug: True if debug information should be printed
+    :type debug: bool
     """
+    if debug:
+        start_time = time.time()
     if use_global_path:
         file_name = os.path.join(global_in_out_path, file_name)
-    ssg = read_ssg_from_file(file_name)
+    ssg = read_ssg_from_file(file_name=file_name, use_global_path=use_global_path, debug=False)
     content = ssg_to_ssgspec(ssg)
-    save_ssg_file(ssg_spec=content, file_name=file_name, force=force)
+    save_ssg_file(ssg_spec=content, file_name=file_name, use_global_path=use_global_path, force=force, debug=False)
+    if debug:
+        print_debug(f"SSG file {file_name} reformatted in {(time.time() - start_time):.6f} seconds")
