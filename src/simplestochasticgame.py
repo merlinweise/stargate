@@ -41,7 +41,7 @@ class SsgVertex:
 
 
 class SsgTransition:
-    def __init__(self, start_vertex: SsgVertex, end_vertices: set[(float, SsgVertex)], action: str):
+    def __init__(self, start_vertex: SsgVertex, end_vertices: set[tuple[float, SsgVertex]], action: str):
         """
         Creates a transition of a simple stochastic game.
         :param start_vertex: Starting vertex of the transition
@@ -80,7 +80,7 @@ class SsgTransition:
 
 
 class SimpleStochasticGame:
-    def __init__(self, vertices: dict[str, SsgVertex], transitions: dict[(SsgVertex, str), SsgTransition], init_vertex):
+    def __init__(self, vertices: dict[str, SsgVertex], transitions: dict[tuple[SsgVertex, str], SsgTransition], init_vertex: SsgVertex):
         """
         Creates a simple stochastic game and checks for deadlock vertices and vertices without ingoing transitions.
         :param vertices: Vertices of the simple stochastic game
@@ -131,7 +131,7 @@ class SimpleStochasticGame:
         return False
 
 
-def has_ssg_vertex_ingoing_transition(vertex: SsgVertex, transitions: dict[(SsgVertex, str), SsgTransition]) -> bool:
+def has_ssg_vertex_ingoing_transition(vertex: SsgVertex, transitions: dict[tuple[SsgVertex, str], SsgTransition]) -> bool:
     """
     Checks if the given vertex has an ingoing transitions.
     :param vertex: Vertex to check
@@ -148,7 +148,7 @@ def has_ssg_vertex_ingoing_transition(vertex: SsgVertex, transitions: dict[(SsgV
     return False
 
 
-def is_deadlock_vertex(vertex: SsgVertex, transitions: dict[(SsgVertex, str), SsgTransition]) -> bool:
+def is_deadlock_vertex(vertex: SsgVertex, transitions: dict[tuple[SsgVertex, str], SsgTransition]) -> bool:
     """
     Checks if the given vertex is a deadlock vertex.
     :param vertex: Vertex to check

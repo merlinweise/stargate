@@ -34,7 +34,7 @@ class SpgVertex:
 
 
 class SpgTransition:
-    def __init__(self, start_vertex: SpgVertex, end_vertices: set[(float, SpgVertex)], action: str):
+    def __init__(self, start_vertex: SpgVertex, end_vertices: set[tuple[float, SpgVertex]], action: str):
         """
         Creates a transition of a simple parity game.
         :param start_vertex: Starting vertex of the transition
@@ -73,7 +73,7 @@ class SpgTransition:
 
 
 class SimpleParityGame:
-    def __init__(self, vertices: dict[str, SpgVertex], transitions: dict[(SpgVertex, str), SpgTransition], init_vertex):
+    def __init__(self, vertices: dict[str, SpgVertex], transitions: dict[tuple[SpgVertex, str], SpgTransition], init_vertex: SpgVertex):
         """
         Creates a simple parity game and checks for deadlock vertices and vertices without ingoing transitions.
         :param vertices: Vertices of the simple parity game
@@ -96,7 +96,7 @@ class SimpleParityGame:
                     print_debug(f"Vertex {vertex.name} is a deadlock vertex. A selfloop was added.")
 
 
-def has_ingoing_transition(vertex: SpgVertex, transitions: dict[(SpgVertex, str), SpgTransition]) -> bool:
+def has_ingoing_transition(vertex: SpgVertex, transitions: dict[tuple[SpgVertex, str], SpgTransition]) -> bool:
     """
     Checks if the given vertex has an ingoing transition.
     :param vertex: Vertex to check
@@ -113,7 +113,7 @@ def has_ingoing_transition(vertex: SpgVertex, transitions: dict[(SpgVertex, str)
     return False
 
 
-def is_deadlock_vertex(vertex: SpgVertex, transitions: dict[(SpgVertex, str), SpgTransition]) -> bool:
+def is_deadlock_vertex(vertex: SpgVertex, transitions: dict[tuple[SpgVertex, str], SpgTransition]) -> bool:
     """
     Checks if a vertex is a deadlock vertex.
     :param vertex: Vertex to check

@@ -15,3 +15,4 @@ def run_command(command_list, use_shell=False, debug=GLOBAL_DEBUG):
         return result
     except subprocess.CalledProcessError:
         print_error(f"Could not execute command {' '.join(command_list)}.")
+        return None

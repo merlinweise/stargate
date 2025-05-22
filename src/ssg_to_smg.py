@@ -45,7 +45,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
             else:
                 if transition.start_vertex.is_eve:
                     new_trans_verts: dict[SsgVertex, SsgVertex] = dict()
-                    new_end_verts: set[(float, SsgVertex)] = set()
+                    new_end_verts: set[tuple[float, SsgVertex]] = set()
                     for prob, vert in transition.end_vertices:
                         if vert.is_eve:
                             new_trans_verts[vert] = ssg.add_extra_vert(False)
@@ -56,7 +56,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
                     additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, new_end_verts, transition.action))
                 else:
                     new_trans_verts: dict[SsgVertex, SsgVertex] = dict()
-                    new_end_verts: set[(float, SsgVertex)] = set()
+                    new_end_verts: set[tuple[float, SsgVertex]] = set()
                     for prob, vert in transition.end_vertices:
                         if not vert.is_eve:
                             new_trans_verts[vert] = ssg.add_extra_vert(True)
@@ -68,11 +68,12 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
         ssg.transitions |= additional_ssg_transitions
         if not sanity_check_alternating_verts(ssg):
             print_warning("The SSG is not alternating. The generated SMG may not be correct.")
-        new_vertices: dict[SsgVertex, (int, int)] = dict()
-        ssg_actions: set[(bool, str)] = set()
+        new_vertices: dict[SsgVertex, tuple[int, int]] = dict()
+        ssg_eve_actions: set[str] = set()
+        ssg_adam_actions: set[str] = set()
         new_eve_actions: dict[str, str] = dict()
         new_adam_actions: dict[str, str] = dict()
-        new_transitions: dict[SsgTransition, ((int, int), str, set[float, (int, int)])] = dict()
+        new_transitions: dict[SsgTransition, tuple[tuple[int, int], str, set[tuple[float, tuple[int, int]]]]] = dict()
         eve_vert_count, adam_vert_count, eve_act_count, adam_act_count = 1, 1, 1, 1
         for vert in ssg.vertices.values():
             if vert.is_eve:
@@ -84,16 +85,17 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
         new_init_vertex = new_vertices[ssg.init_vertex]
         for transition in ssg.transitions.values():
             if transition.start_vertex.is_eve:
-                ssg_actions.add((True, transition.action))
+                ssg_eve_actions.add(transition.action)
             else:
-                ssg_actions.add((False, transition.action))
-        for action in ssg_actions:
-            if action[0]:
-                new_eve_actions[action[1]] = f"e{eve_act_count}"
-                eve_act_count += 1
-            else:
-                new_adam_actions[action[1]] = f"a{adam_act_count}"
-                adam_act_count += 1
+                ssg_eve_actions.add(transition.action)
+
+        for action in ssg_eve_actions:
+            new_eve_actions[action] = f"e{eve_act_count}"
+            eve_act_count += 1
+
+        for action in ssg_adam_actions:
+            new_adam_actions[action] = f"a{adam_act_count}"
+            adam_act_count += 1
         for transition in ssg.transitions.values():
             if transition.start_vertex.is_eve:
                 new_transitions[transition] = (new_vertices[transition.start_vertex], new_eve_actions[transition.action], set())
@@ -143,11 +145,12 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
                 adam_mod += f"\t[{new_adam_actions[transition.action]}] (es={new_transitions[transition][0][0]} & as={new_transitions[transition][0][1]}) \t-> (as'=0) ;\n"
         content += eve_mod + "endmodule\n\n" + adam_mod + "endmodule"
     else:
-        new_vertices: dict[SsgVertex, (int, int)] = dict()
-        ssg_actions: set[(bool, str)] = set()
+        new_vertices: dict[SsgVertex, tuple[int, int]] = dict()
+        ssg_eve_actions: set[str] = set()
+        ssg_adam_actions: set[str] = set()
         new_eve_actions: dict[str, str] = dict()
         new_adam_actions: dict[str, str] = dict()
-        new_transitions: dict[SsgTransition, ((int, int), str, set[(float, (int, int))])] = dict()
+        new_transitions: dict[SsgTransition, tuple[tuple[int, int], str, set[tuple[float, tuple[int, int]]]]] = dict()
         eve_vert_count, adam_vert_count, eve_act_count, adam_act_count = 1, 1, 1, 1
         for vert in ssg.vertices.values():
             if vert.is_eve:
@@ -159,16 +162,15 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
         new_init_vertex = new_vertices[ssg.init_vertex]
         for transition in ssg.transitions.values():
             if transition.start_vertex.is_eve:
-                ssg_actions.add((True, transition.action))
+                ssg_eve_actions.add(transition.action)
             else:
-                ssg_actions.add((False, transition.action))
-        for action in ssg_actions:
-            if action[0]:
-                new_eve_actions[action[1]] = f"e{eve_act_count}"
-                eve_act_count += 1
-            else:
-                new_adam_actions[action[1]] = f"a{adam_act_count}"
-                adam_act_count += 1
+                ssg_adam_actions.add(transition.action)
+        for action in ssg_eve_actions:
+            new_eve_actions[action] = f"e{eve_act_count}"
+            eve_act_count += 1
+        for action in ssg_adam_actions:
+            new_adam_actions[action] = f"a{adam_act_count}"
+            adam_act_count += 1
         for transition in ssg.transitions.values():
             if transition.start_vertex.is_eve:
                 new_transitions[transition] = (
