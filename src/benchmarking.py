@@ -30,7 +30,7 @@ def create_random_ssg(number_of_vertices: int, number_of_transitions: int, numbe
     for vertex in target_vertices:
         vertex.is_target = True
     init_vertex = random.choice(list(vertices.values()))
-    transitions: dict[(SsgVertex, str), SsgTransition] = dict()
+    transitions: dict[tuple[SsgVertex, str], SsgTransition] = dict()
     action = 0
     for start_vertex in vertices.values():
         type_of_transition = random.choice([0, 1])
@@ -135,7 +135,11 @@ def create_complete_graph_ssg(number_of_vertices: int, number_of_target_vertices
     target_vertices = random.sample(list(vertices.values()), number_of_target_vertices)
     for vertex in target_vertices:
         vertex.is_target = True
-        transitions[(vertices[vertex_name], "a")] = SsgTransition(vertices[vertex_name], {(1.0/number_of_vertices, vertices[end_vertex_name]) for end_vertex_name in vertices}, "a")
+    action = 0
+    for start_vertex in vertices.values():
+        for end_vertex in vertices.values():
+            transitions[(start_vertex, str(action))] = SsgTransition(start_vertex, {(1.0, end_vertex)}, str(action))
+            action += 1
     init_vertex = vertices["vertex_0"]
     if debug:
         print_debug(f"Created complete graph SSG with {len(vertices)} vertices and {len(transitions)} transitions.")
@@ -504,7 +508,7 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
     axs[0].set_yscale('log')
     axs[0].scatter(x1[mask_below1], y1[mask_below1], color='blue', label='v2 faster than v1')
     axs[0].scatter(x1[mask_above1], y1[mask_above1], color='red', label='v1 faster than v2')
-    axs[0].plot(x1, x1, linestyle='-', color='gray', label='y = x')
+    axs[0].plot(x1, x1, linestyle='-', color='gray', label='v1 and v2 equal')
     axs[0].set_xlabel("v1 Transformation Time [s]")
     axs[0].set_ylabel("v2 Transformation Time [s]")
     axs[0].grid(True, which='major', ls='--')
@@ -516,7 +520,7 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
     axs[1].set_yscale('log')
     axs[1].scatter(x2[mask_below2], y2[mask_below2], color='blue', label='v2 faster than v1')
     axs[1].scatter(x2[mask_above2], y2[mask_above2], color='red', label='v1 faster than v2')
-    axs[1].plot(x2, x2, linestyle='-', color='gray', label='y = x')
+    axs[1].plot(x2, x2, linestyle='-', color='gray', label='v1 and v2 equal')
     axs[1].set_xlabel("v1 Property Checking Time [s]")
     axs[1].set_ylabel("v2 Property Checking Time [s]")
     axs[1].grid(True, which='major', ls='--')
