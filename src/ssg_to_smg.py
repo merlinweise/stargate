@@ -22,6 +22,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
             else:
                 extra_eve_act = f"extra_eve_action{i}"
                 break
+        i = 1
         while True:
             if ssg.has_action(f"extra_adam_action{i}"):
                 i += 1
@@ -31,7 +32,9 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
         additional_ssg_transitions = dict()
         for transition in ssg.transitions.values():
             if len(transition.end_vertices) == 1:
-                if transition.start_vertex.is_eve and next(iter(transition.end_vertices))[1].is_eve:
+                if transition.start_vertex == next(iter(transition.end_vertices))[1]:
+                    continue
+                elif transition.start_vertex.is_eve and next(iter(transition.end_vertices))[1].is_eve:
                     new_trans_vert = ssg.add_extra_vert(False)
                     additional_ssg_transitions[new_trans_vert, extra_adam_act] = SsgTransition(new_trans_vert, {(1.0, next(iter(transition.end_vertices))[1])}, extra_adam_act)
                     additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, {(1.0, new_trans_vert)}, transition.action))
@@ -63,7 +66,8 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
                             new_end_verts.add((prob, vert))
                     additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, new_end_verts, transition.action))
         ssg.transitions |= additional_ssg_transitions
-        sanity_check_alternating_verts(ssg)
+        if not sanity_check_alternating_verts(ssg):
+            print_warning("The SSG is not alternating. The generated SMG may not be correct.")
         new_vertices: dict[SsgVertex, (int, int)] = dict()
         ssg_actions: set[(bool, str)] = set()
         new_eve_actions: dict[str, str] = dict()
@@ -274,15 +278,17 @@ def has_adam_probabilistic_actions(ssg: SimpleStochasticGame) -> bool:
 def sanity_check_alternating_verts(ssg: SimpleStochasticGame) -> bool:
     result = True
     for transition in ssg.transitions.values():
+        if len(transition.end_vertices) == 1 and transition.start_vertex == next(iter(transition.end_vertices))[1]:
+            continue
         if transition.start_vertex.is_eve:
             for prob, vert in transition.end_vertices:
                 if vert.is_eve:
-                    print_warning(f"Transition from {transition.start_vertex.name} to {vert.name} is not alternating")
+                    print_warning(f"Transition from {transition.start_vertex.name} to {vert.name} is neither alternating nor a self-loop.")
                     result = False
         else:
             for prob, vert in transition.end_vertices:
                 if not vert.is_eve:
-                    print_warning(f"Transition from {transition.start_vertex.name} to {vert.name} is not alternating")
+                    print_warning(f"Transition from {transition.start_vertex.name} to {vert.name} is neither alternating nor a self-loop.")
                     result = False
     return result
 
@@ -393,3 +399,5 @@ def create_png_file(dot_file: str, png_file: str = "", open_png: bool = False, f
             run_command(["xdg-open", png_file], use_shell=True, debug=debug)
     if debug:
         print_debug(f"PNG file {png_file} created in {(time.time() - start_time):.6f} seconds")
+
+
