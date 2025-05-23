@@ -309,7 +309,7 @@ def check_property(smg_file, property_string, debug: bool = GLOBAL_DEBUG) -> flo
     if debug:
         start_time = time.time()
     smg_file = os.path.join(GLOBAL_IN_OUT_PATH, smg_file)
-    command = ["prism", smg_file, "-pf", property_string]
+    command = ["prism", smg_file, "-pf", property_string, "-maxiters", "1000000000"]
     result = run_command(command, use_shell=True, )
     output = result.stdout
     match = re.search(r'Result:\s*(\d\.\d+(E-\d+)?)', output)

@@ -13,29 +13,39 @@ def max_denom_and_min_prob(spg: SimpleParityGame, max_d: int=10_000) -> (float, 
     fractions = [Fraction(f).limit_denominator(max_d) for f in floats]
     return (min(floats), max(fr.denominator for fr in fractions))
 
-def compute_alphas_for_spg(spg: SimpleParityGame, max_d: int = 10_000):
+def compute_alphas_for_spg(spg: SimpleParityGame, epsilon: float = None, max_d: int = 10_000):
+
     delta_min_float, max_denominator_M = max_denom_and_min_prob(spg, max_d)
     n_states = len(spg.vertices)
     used = sorted({v.priority for v in spg.vertices.values()})
 
     delta_min = Fraction(delta_min_float).limit_denominator(max_d)
     one_minus = Fraction(1, 1) - delta_min
+    if epsilon is None:
+        numerator   = delta_min ** n_states
+        denominator = 8 * factorial(n_states) ** 2 * max_denominator_M ** (2 * n_states * n_states)
+        alpha0 = float(numerator / denominator)
 
-    numerator   = delta_min ** n_states
-    denominator = 8 * factorial(n_states) ** 2 * max_denominator_M ** (2 * n_states * n_states)
-    alpha0 = float(numerator / denominator)
+        ratio_bound = (one_minus * (delta_min ** n_states)) / (denominator + 1)
 
-    ratio_bound = (one_minus * (delta_min ** n_states)) / (denominator + 1)
+        alphas = { used[0]: alpha0 }
+        for prev_k, next_k in zip(used, used[1:]):
+            gap = next_k - prev_k
+            alphas[next_k] = alphas[prev_k] * (ratio_bound ** gap)
+    else:
+        numerator = 4 * epsilon * delta_min ** n_states
+        denominator = (4 - epsilon) * delta_min
+        alpha0 = float(numerator / denominator)
 
-    alphas = { used[0]: alpha0 }
-    for prev_k, next_k in zip(used, used[1:]):
-        gap = next_k - prev_k
-        alphas[next_k] = alphas[prev_k] * (ratio_bound ** gap)
-
+        ratio_bound = (one_minus * (delta_min ** n_states)) / (((8 * (4 - epsilon)) / (4 * epsilon)) + 1)
+        alphas = { used[0]: alpha0 }
+        for prev_k, next_k in zip(used, used[1:]):
+            gap = next_k - prev_k
+            alphas[next_k] = alphas[prev_k] * (ratio_bound ** gap)
     return alphas
 
 
-def spg_to_ssg(spg: SimpleParityGame) -> SimpleStochasticGame:
+def spg_to_ssg(spg: SimpleParityGame, epsilon: float = None) -> SimpleStochasticGame:
     """
     Converts a SimpleParityGame to a SimpleStochasticGame.
     :param spg: The SimpleParityGame to convert
@@ -43,7 +53,7 @@ def spg_to_ssg(spg: SimpleParityGame) -> SimpleStochasticGame:
     :return: The converted SimpleStochasticGame
     :rtype: SimpleStochasticGame
     """
-    alphas = compute_alphas_for_spg(spg)
+    alphas = compute_alphas_for_spg(spg, epsilon=epsilon)
     vertices: dict[str, SsgVertex] = dict()
     transitions: dict[tuple[SsgVertex, str], SsgTransition] = dict()
     respective_spg_ssg_vertixes: dict[SpgVertex, SsgVertex] = dict()
@@ -98,9 +108,9 @@ def spg_to_ssg(spg: SimpleParityGame) -> SimpleStochasticGame:
 
 
 
-spg = read_spg_from_file("first_spg.spg", use_global_path=True)
-ssg = spg_to_ssg(spg)
+spg = read_spg_from_file("test_1.spg", use_global_path=True)
+ssg = spg_to_ssg(spg, epsilon=1e-100)
 from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability
 smgspec = ssg_to_smgspec(ssg)
-save_smg_file(smgspec, "first_spg.smg", use_global_path=True, force=True)
-check_target_reachability("first_spg.smg", use_global_path=True, print_probabilities=True, debug=True)
+save_smg_file(smgspec, "test_1.smg", use_global_path=True, force=True)
+check_target_reachability("test_1.smg", use_global_path=True, print_probabilities=True, debug=True)
