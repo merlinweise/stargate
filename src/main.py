@@ -21,4 +21,6 @@ benchmarking.benchmark_multiple_ssgs(
     print_result=True
 )"""
 
+set((2,3),(1,2))
+
 

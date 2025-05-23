@@ -1,7 +1,7 @@
 from fractions import Fraction
 from math import factorial
 from settings import *
-from src.simpleparitygame import SimpleParityGame
+from src.simpleparitygame import SimpleParityGame, read_spg_from_file
 from src.simplestochasticgame import SimpleStochasticGame, SsgVertex, SsgTransition
 
 
@@ -23,7 +23,7 @@ def compute_alphas_for_spg(spg: SimpleParityGame, max_d: int = 10_000):
 
     numerator   = delta_min ** n_states
     denominator = 8 * factorial(n_states) ** 2 * max_denominator_M ** (2 * n_states * n_states)
-    alpha0 = float(numerator / denominator)    # Division einer Fraction durch int → Fraction
+    alpha0 = float(numerator / denominator)
 
     ratio_bound = (one_minus * (delta_min ** n_states)) / (denominator + 1)
 
@@ -43,26 +43,28 @@ def spg_to_ssg(spg: SimpleParityGame) -> SimpleStochasticGame:
     :return: The converted SimpleStochasticGame
     :rtype: SimpleStochasticGame
     """
-    alphas = {0 : 0.5, 1 : 0.25}# compute_alphas_for_spg(spg)
+    alphas = compute_alphas_for_spg(spg)
     vertices: dict[str, SsgVertex] = dict()
     transitions: dict[tuple[SsgVertex, str], SsgTransition] = dict()
+    respective_spg_ssg_vertixes: dict[SpgVertex, SsgVertex] = dict()
     initial_vertex: SsgVertex = None
 
     for v in spg.vertices.values():
         vertices[v.name] = SsgVertex(name=v.name, is_eve=v.is_eve, is_target=False)
+        respective_spg_ssg_vertixes[v] = vertices[v.name]
     new_vertices: dict[str, SsgVertex] = dict()
-    inital_vertex = vertices[spg.initial_vertex.name]
+    initial_vertex = vertices[spg.init_vertex.name]
     respective_intermediate_vertices: dict[SsgVertex, SsgVertex] = dict()
     for v in spg.vertices.values():
         if not vertices.keys().__contains__(v.name+"\'"):
             new_vertices[v.name+"\'"] = SsgVertex(name=v.name+"\'", is_eve=v.is_eve, is_target=False)
-            respective_intermediate_vertices[vertices[v.name]] = vertices[v.name+"\'"]
+            respective_intermediate_vertices[vertices[v.name]] = new_vertices[v.name+"\'"]
         else:
             i = 0
             while vertices.keys().__contains__(v.name+"\'"+str(i)):
                 i += 1
             new_vertices[v.name+"\'"+str(i)] = SsgVertex(name=v.name+"\'"+str(i), is_eve=v.is_eve, is_target=False)
-            respective_intermediate_vertices[vertices[v.name]] = vertices[v.name+"\'"+str(i)]
+            respective_intermediate_vertices[vertices[v.name]] = new_vertices[v.name+"\'"+str(i)]
     vertices |= new_vertices
     if not vertices.keys().__contains__("v_win"):
         vertices["v_win"] = SsgVertex(name="v_win", is_eve=True, is_target=True)
@@ -80,7 +82,7 @@ def spg_to_ssg(spg: SimpleParityGame) -> SimpleStochasticGame:
         vertices["v_lose"+str(i)] = SsgVertex(name="v_lose"+str(i), is_eve=False, is_target=False)
 
     for transition in spg.transitions.values():
-        start_v = vertices[t.start_vertex]
+        start_v = vertices[transition.start_vertex.name]
         action = transition.action
         end_vs = set()
         for prob, end_v in transition.end_vertices:
@@ -89,11 +91,16 @@ def spg_to_ssg(spg: SimpleParityGame) -> SimpleStochasticGame:
 
     for vertex in spg.vertices.values():
         if vertex.priority % 2 == 0:
-            transitions[(respective_intermediate_vertices[vertex], "alpha")] = SsgTransition(respective_intermediate_vertices[vertex], "alpha", set((alphas[vertex.priority], vertices["v_win"]), (1-alphas[vertex.priority], vertices[vertex])))
+            transitions[(respective_intermediate_vertices[respective_spg_ssg_vertixes[vertex]], "alpha")] = SsgTransition(respective_intermediate_vertices[respective_spg_ssg_vertixes[vertex]], {(alphas[vertex.priority], vertices["v_win"]), (1-alphas[vertex.priority], vertices[respective_spg_ssg_vertixes[vertex].name])}, "alpha")
         else:
-            transitions[(respective_intermediate_vertices[vertex], "alpha")] = SsgTransition(respective_intermediate_vertices[vertex], "alpha", set((alphas[vertex.priority], vertices["v_lose"]), (1-alphas[vertex.priority], vertices[vertex])))
-
-    return SimpleStochasticGame(spg, transitions, initial_vertex)
-
+            transitions[(respective_intermediate_vertices[respective_spg_ssg_vertixes[vertex]], "alpha")] = SsgTransition(respective_intermediate_vertices[respective_spg_ssg_vertixes[vertex]], {(alphas[vertex.priority], vertices["v_lose"]), (1-alphas[vertex.priority], vertices[respective_spg_ssg_vertixes[vertex].name])}, "alpha")
+    return SimpleStochasticGame(vertices, transitions, initial_vertex)
 
 
+
+spg = read_spg_from_file("first_spg.spg", use_global_path=True)
+ssg = spg_to_ssg(spg)
+from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability
+smgspec = ssg_to_smgspec(ssg)
+save_smg_file(smgspec, "first_spg.smg", use_global_path=True, force=True)
+check_target_reachability("first_spg.smg", use_global_path=True, print_probabilities=True, debug=True)
