@@ -851,9 +851,9 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
 
 
 def main():
-    """p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
+    p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
         "random",
-        time_per_iteration=900,
+        time_per_iteration=1800,
         use_global_path=True,
         debug=True,
         force=True,
@@ -868,10 +868,9 @@ def main():
         show_times=False,
         show_stats=False
     )
-    """
     p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
         "random_no_additional_selfloops",
-        time_per_iteration=900,
+        time_per_iteration=1800,
         use_global_path=True,
         debug=True,
         force=True,
@@ -888,7 +887,7 @@ def main():
     )
     p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
         "binary",
-        time_per_iteration=900,
+        time_per_iteration=1800,
         use_global_path=True,
         debug=True,
         force=True,
@@ -905,7 +904,7 @@ def main():
     )
     p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
         "complete",
-        time_per_iteration=900,
+        time_per_iteration=1800,
         use_global_path=True,
         debug=True,
         force=True,
@@ -922,7 +921,7 @@ def main():
     )
     p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
         "chain",
-        time_per_iteration=900,
+        time_per_iteration=1800,
         use_global_path=True,
         debug=True,
         force=True,
@@ -939,7 +938,7 @@ def main():
     )
     p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
         "empty",
-        time_per_iteration=900,
+        time_per_iteration=1800,
         use_global_path=True,
         debug=True,
         force=True,
