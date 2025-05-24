@@ -783,7 +783,7 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
     if save_plots:
         filename = f"{plot_name}_times_combined.png"
         if use_global_path:
-            filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename)
+            filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", "exponential", filename)
         fig.savefig(filename)
 
     if not show_times:
@@ -851,7 +851,7 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
 
 
 def main():
-    p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
+    """p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
         "random",
         time_per_iteration=900,
         use_global_path=True,
@@ -865,9 +865,10 @@ def main():
         benchmark_info=info,
         use_global_path=True,
         save_plots=True,
-        show_times=True,
-        show_stats=True
+        show_times=False,
+        show_stats=False
     )
+    """
     p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
         "random_no_additional_selfloops",
         time_per_iteration=900,
@@ -882,8 +883,8 @@ def main():
         benchmark_info=info,
         use_global_path=True,
         save_plots=True,
-        show_times=True,
-        show_stats=True
+        show_times=False,
+        show_stats=False
     )
     p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
         "binary",
@@ -899,8 +900,8 @@ def main():
         benchmark_info=info,
         use_global_path=True,
         save_plots=True,
-        show_times=True,
-        show_stats=True
+        show_times=False,
+        show_stats=False
     )
     p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
         "complete",
@@ -916,8 +917,8 @@ def main():
         benchmark_info=info,
         use_global_path=True,
         save_plots=True,
-        show_times=True,
-        show_stats=True
+        show_times=False,
+        show_stats=False
     )
     p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
         "chain",
@@ -933,8 +934,8 @@ def main():
         benchmark_info=info,
         use_global_path=True,
         save_plots=True,
-        show_times=True,
-        show_stats=True
+        show_times=False,
+        show_stats=False
     )
     p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
         "empty",
@@ -950,8 +951,8 @@ def main():
         benchmark_info=info,
         use_global_path=True,
         save_plots=True,
-        show_times=True,
-        show_stats=True
+        show_times=False,
+        show_stats=False
     )
 
 
