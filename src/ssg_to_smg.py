@@ -14,6 +14,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
         start_time = time.time()
     content = "smg\n\n"
     if version1:
+        old_ssg = ssg
         ssg = copy.deepcopy(ssg)
         i = 1
         while True:
@@ -87,7 +88,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
             if transition.start_vertex.is_eve:
                 ssg_eve_actions.add(transition.action)
             else:
-                ssg_eve_actions.add(transition.action)
+                ssg_adam_actions.add(transition.action)
 
         for action in ssg_eve_actions:
             new_eve_actions[action] = f"e{eve_act_count}"

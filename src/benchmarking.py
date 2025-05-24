@@ -1,8 +1,17 @@
 import random
 import matplotlib
-from ssg_to_smg import *
-from simplestochasticgame import is_deadlock_vertex
+import os
+import time
+import re
+import contextlib
+import io
+from multiprocessing import Process, Queue
+import queue as pyqueue  # to handle Empty exception
+from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability
+from simplestochasticgame import SsgVertex, SsgTransition, SimpleStochasticGame, is_deadlock_vertex
 from error_handling import print_error, print_debug
+from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH
+from shell_commands import run_command
 
 
 def create_random_ssg(number_of_vertices: int, number_of_transitions: int, number_of_target_vertices: int, no_additional_selfloops: bool = False, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
@@ -262,7 +271,7 @@ def print_smg_stats(smg_file: str, debug: bool = GLOBAL_DEBUG, use_global_path: 
     print(output)
 
 
-def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, write: bool = None, result_path: str = None, use_global_path: bool = False, force: bool = True, debug: bool = GLOBAL_DEBUG, print_result: bool = False) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, int, int]]:
+def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, write: bool = None, result_path: str = None, use_global_path: bool = False, force: bool = True, debug: bool = GLOBAL_DEBUG, print_result: bool = False) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]:
     """
     Benchmark the creation and property checking of multiple SSGs.
     :param ssg_count: Number of SSGs to create
@@ -284,7 +293,7 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, writ
     :param print_result: Whether to print the result of the benchmark
     :type print_result: bool
     :return: Tuple containing the average transformation and property checking times for both versions
-    :rtype: tuple[list[float], list[float], list[float], list[float], str]
+    :rtype: tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]
     """
     import time
     total_v1_trans_time = 0.0
@@ -304,7 +313,7 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, writ
     all_v1_transitions = []
     all_v2_transitions = []
     if result_path is None:
-        result_path = f"benchmark_results_{ssg_count}_{ssg_type}_{size_param}.txt"
+        result_path = f"benchmark_results_normal_{ssg_count}_{ssg_type}_{size_param}.txt"
     if use_global_path:
         result_path = os.path.join(GLOBAL_IN_OUT_PATH, result_path)
     if write is None:
@@ -314,6 +323,8 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, writ
         match ssg_type:
             case "random":
                 print_debug(f"Creating {ssg_count} random SSGs with {size_param} vertices and {5*size_param} transitions.")
+            case "random_no_additional_selfloops":
+                print_debug(f"Creating {ssg_count} random SSGs with {size_param} vertices and {5*size_param} transitions without additional self-loops.")
             case "binary":
                 print_debug(f"Creating {ssg_count} binary tree SSGs with {size_param} layers and {round(0.3*(2**size_param)/2)} target vertices.")
             case "complete":
@@ -360,6 +371,9 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, writ
         if use_global_path:
             smg_v1_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i+1}_v1.smg")
             smg_v2_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i+1}_v2.smg")
+        else:
+            smg_v1_path = f"ssg_{i+1}_v1.smg"
+            smg_v2_path = f"ssg_{i+1}_v2.smg"
         if trans_v1_time == 0.0 or trans_v2_time == 0.0 or prop_v1_time == 0.0 or prop_v2_time == 0.0:
             print_error(f"Error: Transformation or property checking time is 0.0 for SSG {i+1}.")
         os.remove(smg_v1_path)
@@ -405,10 +419,371 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, writ
             with open(result_path, "w") as f:
                 f.write(output)
 
-    return all_v1_trans_times, all_v2_trans_times, all_v1_prop_times, all_v2_prop_times, all_v1_vertices, all_v2_vertices, all_v1_transitions, all_v2_transitions, (ssg_type, ssg_count, size_param)
+    return all_v1_trans_times, all_v2_trans_times, all_v1_prop_times, all_v2_prop_times, all_v1_vertices, all_v2_vertices, all_v1_transitions, all_v2_transitions, ("norm", ssg_type, ssg_count, size_param)
 
 
-def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: list[float], all_v1_prop_times: list[float], all_v2_prop_times: list[float], all_v1_vertices: list[int], all_v2_vertices: list[int], all_v1_transitions: list[int], all_v2_transitions: list[int], benchmark_info: tuple[str, int, int], show_times: bool = True, show_stats: bool = True, plot_name: str = None, save_plots: bool = False, use_global_path: bool = True, debug: bool = GLOBAL_DEBUG) -> None:
+def _iteration_worker(q, ssg_type, i, debug, use_global_path):
+    """
+    Worker function to run a single benchmark iteration and return results via Queue.
+    """
+    try:
+        result = single_iteration_for_exponential_benchmark(ssg_type, i, debug, use_global_path)
+        q.put(result)
+    except Exception as e:
+        q.put(e)
+
+
+def single_iteration_for_exponential_benchmark(ssg_type: str, i: int, debug: bool = GLOBAL_DEBUG, use_global_path: bool = True) -> tuple[float, float, float, float, int, int, int, int, str, str, int]:
+    if ssg_type == "binary":
+        size_param = i + 2
+    else:
+        size_param = (2 ** (i + 1))
+    if ssg_type == "random":
+        ssg_i = create_random_ssg(size_param, 5 * size_param, max(1, size_param // 10),
+                                  no_additional_selfloops=False)
+    elif ssg_type == "random_no_additional_selfloops":
+        ssg_i = create_random_ssg(size_param, 5 * size_param, max(1, size_param // 10),
+                                  no_additional_selfloops=True)
+    elif ssg_type == "binary":
+        ssg_i = create_binary_tree_ssg(size_param, 0.3)
+    elif ssg_type == "complete":
+        ssg_i = create_complete_graph_ssg(size_param, max(1, size_param // 10))
+    elif ssg_type == "chain":
+        ssg_i = create_chain_ssg(size_param)
+    else:
+        ssg_i = create_empty_ssg(size_param)
+
+    start_v1 = time.perf_counter()
+    smg_v1 = ssg_to_smgspec(ssg_i, version1=True)
+    trans_v1_time = time.perf_counter() - start_v1
+    save_smg_file(smg_v1, f"ssg_{i + 1}_v1.smg", use_global_path=use_global_path, force=True)
+    start_v1_prop = time.perf_counter()
+    check_target_reachability(f"ssg_{i + 1}_v1.smg", print_probabilities=False, use_global_path=use_global_path)
+    prop_v1_time = time.perf_counter() - start_v1_prop
+    vert_v1, trans_v1, build_time1 = check_smg_stats(f"ssg_{i + 1}_v1.smg", use_global_path=use_global_path)
+
+    start_v2 = time.perf_counter()
+    smg_v2 = ssg_to_smgspec(ssg_i, version1=False)
+    trans_v2_time = time.perf_counter() - start_v2
+    save_smg_file(smg_v2, f"ssg_{i + 1}_v2.smg", use_global_path=use_global_path, force=True)
+    start_v2_prop = time.perf_counter()
+    check_target_reachability(f"ssg_{i + 1}_v2.smg", print_probabilities=False, use_global_path=use_global_path)
+    prop_v2_time = time.perf_counter() - start_v2_prop
+    vert_v2, trans_v2, build_time2 = check_smg_stats(f"ssg_{i + 1}_v2.smg", use_global_path=use_global_path)
+
+    if use_global_path:
+        smg_v1_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v1.smg")
+        smg_v2_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v2.smg")
+    else:
+        smg_v1_path = f"ssg_{i + 1}_v1.smg"
+        smg_v2_path = f"ssg_{i + 1}_v2.smg"
+    if trans_v1_time == 0.0 or trans_v2_time == 0.0 or prop_v1_time == 0.0 or prop_v2_time == 0.0:
+        print_error(f"Error: Transformation or property checking time is 0.0 for SSG {i + 1}.")
+    return trans_v1_time, trans_v2_time, prop_v1_time, prop_v2_time, vert_v1, vert_v2, trans_v1, trans_v2, smg_v1_path, smg_v2_path, size_param
+
+
+def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, write: bool = None, result_path: str = None, use_global_path: bool = True, force: bool = True, debug: bool = GLOBAL_DEBUG, print_result: bool = False) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]:
+    """
+        Benchmark the creation and property checking of multiple SSGs.
+        :param ssg_type: Type of SSG to create (random, binary, empty)
+        :type ssg_type: str
+        :param time_per_iteration: Time in seconds for each iteration
+        :type time_per_iteration: int
+        :param write: Whether to write the benchmark results to a file
+        :type write: bool
+        :param result_path: Path to save the benchmark results
+        :type result_path: str
+        :param use_global_path: Whether to use the global path for the SMG file
+        :type use_global_path: bool
+        :param force: Whether to force the creation of the SSG
+        :type force: bool
+        :param debug: Whether to print debug information
+        :type debug: bool
+        :param print_result: Whether to print the result of the benchmark
+        :type print_result: bool
+        :return: Tuple containing the average transformation and property checking times for both versions
+        :rtype: tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]
+        """
+
+    total_v1_trans_time = 0.0
+    total_v2_trans_time = 0.0
+    total_v1_prop_time = 0.0
+    total_v2_prop_time = 0.0
+    all_v1_trans_times = []
+    all_v2_trans_times = []
+    all_v1_prop_times = []
+    all_v2_prop_times = []
+    total_v1_vertices = 0
+    total_v2_vertices = 0
+    total_v1_transitions = 0
+    total_v2_transitions = 0
+    all_v1_vertices = []
+    all_v2_vertices = []
+    all_v1_transitions = []
+    all_v2_transitions = []
+    if result_path is None:
+        result_path = f"benchmark_results_exponential_{ssg_type}_max_{time_per_iteration}.txt"
+    if use_global_path:
+        result_path = os.path.join(GLOBAL_IN_OUT_PATH, result_path)
+    if write is None:
+        write = False if not force and os.path.exists(result_path) and os.path.getsize(result_path) > 0 else True
+    output = ""
+    if debug:
+        match ssg_type:
+            case "random":
+                print_debug(
+                    f"Creating random SSGs that grow exponentially until timeout of {time_per_iteration} seconds.")
+            case "random_no_additional_selfloops":
+                print_debug(
+                    f"Creating random SSGs without additional self-loops that grow exponentially until timeout of {time_per_iteration} seconds.")
+            case "binary":
+                print_debug(
+                    f"Creating binary tree SSGs that grow exponentially until timeout of {time_per_iteration} seconds.")
+            case "complete":
+                print_debug(
+                    f"Creating complete graph SSGs that grow exponentially until timeout of {time_per_iteration} seconds.")
+            case "chain":
+                print_debug(f"Creating chain SSGs that grow exponentially until timeout of {time_per_iteration} seconds.")
+            case _:
+                print_debug(f"Creating empty SSGs that grow exponentially until timeout of {time_per_iteration} seconds.")
+    output += "Benchmark-Resultate\n"
+    i = 0
+    while True:
+        q = Queue()
+        p = Process(target=_iteration_worker, args=(q, ssg_type, i, debug, use_global_path))
+        start_time = time.perf_counter()
+        p.start()
+        p.join(timeout=time_per_iteration)
+        end_time = time.perf_counter()
+
+        if p.is_alive():
+            if debug:
+                print_debug(f"Timeout of {time_per_iteration} seconds reached for SSG {i + 1}.")
+            p.terminate()
+            p.join()
+            for path in [f"ssg_{i + 1}_v1.smg", f"ssg_{i + 1}_v2.smg"]:
+                try:
+                    os.remove(os.path.join(GLOBAL_IN_OUT_PATH, path) if use_global_path else path)
+                except FileNotFoundError:
+                    pass
+            break
+
+        # Get result from the Queue
+        try:
+            result = q.get_nowait()
+        except pyqueue.Empty:
+            print_error(f"Error: No result received from subprocess for SSG {i + 1}.")
+            break
+
+        if isinstance(result, Exception):
+            print_error(f"Subprocess failed with exception: {result}")
+            break
+
+        (trans_v1_time, trans_v2_time, prop_v1_time, prop_v2_time,
+         vert_v1, vert_v2, trans_v1, trans_v2,
+         smg_v1_path, smg_v2_path, size_param) = result
+
+        if vert_v1 < 0 or vert_v2 < 0 or trans_v1 < 0 or trans_v2 < 0:
+            print_error(f"Error: Negative values for vertices or transitions in SSG {i + 1}.")
+            break
+
+        if debug:
+            print_debug(f"SSG {i + 1} with size parameter {size_param} successfully completed in {end_time-start_time:.2f} seconds.")
+            print_debug(f"Preparing SSG {i + 2}.")
+
+        # Remove temporary .smg files
+        try:
+            os.remove(smg_v1_path)
+            os.remove(smg_v2_path)
+        except FileNotFoundError:
+            pass
+
+        # Collect results
+        all_v1_trans_times.append(trans_v1_time)
+        all_v2_trans_times.append(trans_v2_time)
+        all_v1_prop_times.append(prop_v1_time)
+        all_v2_prop_times.append(prop_v2_time)
+        all_v1_vertices.append(vert_v1)
+        all_v2_vertices.append(vert_v2)
+        all_v1_transitions.append(trans_v1)
+        all_v2_transitions.append(trans_v2)
+
+        total_v1_trans_time += trans_v1_time
+        total_v2_trans_time += trans_v2_time
+        total_v1_prop_time += prop_v1_time
+        total_v2_prop_time += prop_v2_time
+        total_v1_vertices += vert_v1
+        total_v2_vertices += vert_v2
+        total_v1_transitions += trans_v1
+        total_v2_transitions += trans_v2
+
+        i += 1
+
+    """ wzdwith concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
+        while True:
+            future = executor.submit(single_iteration_for_exponential_benchmark, ssg_type, i, debug, use_global_path)
+            try:
+                start_time = time.perf_counter()
+                (trans_v1_time, trans_v2_time, prop_v1_time, prop_v2_time, vert_v1, vert_v2, trans_v1, trans_v2, smg_v1_path, smg_v2_path, size_param) = future.result(timeout=time_per_iteration)
+                end_time = time.perf_counter()
+                if vert_v1 < 0 or vert_v2 < 0 or trans_v1 < 0 or trans_v2 < 0:
+                    print_error(f"Error: Negative values for vertices or transitions in SSG {i + 1}.")
+                    break
+                if debug:
+                    print_debug(f"SSG {i + 1} with size parameter {size_param} created and evaluated in {end_time - start_time:.2f} seconds.")
+                    print_debug(f"Now evaluating SSG {i + 2} with size parameter {2* size_param}.")
+            except concurrent.futures.TimeoutError:
+                if debug:
+                    print_debug(f"Timeout reached after {time_per_iteration} seconds for SSG {i + 1}.")
+                future.cancel()
+                executor.shutdown(wait=False)
+                for path in [f"ssg_{i + 1}_v1.smg", f"ssg_{i + 1}_v2.smg"]:
+                    try:
+                        if use_global_path:
+                            os.remove(os.path.join(GLOBAL_IN_OUT_PATH, path))
+                        else:
+                            os.remove(path)
+                    except FileNotFoundError:
+                        pass
+                break
+            try:
+                os.remove(smg_v1_path)
+                os.remove(smg_v2_path)
+            except FileNotFoundError:
+                pass
+
+            all_v1_trans_times.append(trans_v1_time)
+            all_v2_trans_times.append(trans_v2_time)
+            all_v1_prop_times.append(prop_v1_time)
+            all_v2_prop_times.append(prop_v2_time)
+            all_v1_vertices.append(vert_v1)
+            all_v2_vertices.append(vert_v2)
+            all_v1_transitions.append(trans_v1)
+            all_v2_transitions.append(trans_v2)
+
+            total_v1_trans_time += trans_v1_time
+            total_v2_trans_time += trans_v2_time
+            total_v1_prop_time += prop_v1_time
+            total_v2_prop_time += prop_v2_time
+            total_v1_vertices += vert_v1
+            total_v2_vertices += vert_v2
+            total_v1_transitions += trans_v1
+            total_v2_transitions += trans_v2
+
+            i += 1"""
+
+    """i = 0
+    while True:
+        size_param = (2 ** (i + 1))
+        try:
+            if debug:
+                print_debug(f"{i} SSGs created and evaluated. Now creating and evaluating SSG {i+1}. Current size parameter: {size_param}.")
+            if ssg_type == "random":
+                ssg_i = create_random_ssg(size_param, 5 * size_param, max(1, size_param // 10),
+                                          no_additional_selfloops=False)
+            elif ssg_type == "random_no_additional_selfloops":
+                ssg_i = create_random_ssg(size_param, 5 * size_param, max(1, size_param // 10),
+                                          no_additional_selfloops=True)
+            elif ssg_type == "binary":
+                ssg_i = create_binary_tree_ssg(size_param, 0.3)
+            elif ssg_type == "complete":
+                ssg_i = create_complete_graph_ssg(size_param, max(1, size_param // 10))
+            elif ssg_type == "chain":
+                ssg_i = create_chain_ssg(size_param)
+            else:
+                ssg_i = create_empty_ssg(size_param)
+
+            start_v1 = time.perf_counter()
+            smg_v1 = ssg_to_smgspec(ssg_i, version1=True)
+            trans_v1_time = time.perf_counter() - start_v1
+            save_smg_file(smg_v1, f"ssg_{i + 1}_v1.smg", use_global_path=use_global_path, force=True)
+            start_v1_prop = time.perf_counter()
+            check_target_reachability(f"ssg_{i + 1}_v1.smg", print_probabilities=False, use_global_path=use_global_path)
+            prop_v1_time = time.perf_counter() - start_v1_prop
+            vert_v1, trans_v1, build_time1 = check_smg_stats(f"ssg_{i + 1}_v1.smg", use_global_path=use_global_path)
+
+            start_v2 = time.perf_counter()
+            smg_v2 = ssg_to_smgspec(ssg_i, version1=False)
+            trans_v2_time = time.perf_counter() - start_v2
+            save_smg_file(smg_v2, f"ssg_{i + 1}_v2.smg", use_global_path=use_global_path, force=True)
+            start_v2_prop = time.perf_counter()
+            check_target_reachability(f"ssg_{i + 1}_v2.smg", print_probabilities=False, use_global_path=use_global_path)
+            prop_v2_time = time.perf_counter() - start_v2_prop
+            vert_v2, trans_v2, build_time2 = check_smg_stats(f"ssg_{i + 1}_v2.smg", use_global_path=use_global_path)
+
+            if use_global_path:
+                smg_v1_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v1.smg")
+                smg_v2_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v2.smg")
+            else:
+                smg_v1_path = f"ssg_{i + 1}_v1.smg"
+                smg_v2_path = f"ssg_{i + 1}_v2.smg"
+            if trans_v1_time == 0.0 or trans_v2_time == 0.0 or prop_v1_time == 0.0 or prop_v2_time == 0.0:
+                print_error(f"Error: Transformation or property checking time is 0.0 for SSG {i + 1}.")
+        except TimeoutError:
+            if debug:
+                print_debug(f"Timeout reached after {time_per_iteration} seconds for SSG {i + 1}.")
+                if use_global_path:
+                    if os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v1.smg")):
+                        os.remove(os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v1.smg"))
+                    if os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v2.smg")):
+                        os.remove(os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v2.smg"))
+                else:
+                    if os.path.exists(f"ssg_{i + 1}_v1.smg"):
+                        os.remove(f"ssg_{i + 1}_v1.smg")
+                    if os.path.exists(f"ssg_{i + 1}_v2.smg"):
+                        os.remove(f"ssg_{i + 1}_v2.smg")
+                break
+        else:
+            os.remove(smg_v1_path)
+            os.remove(smg_v2_path)
+
+            all_v1_trans_times.append(trans_v1_time)
+            all_v2_trans_times.append(trans_v2_time)
+            all_v1_prop_times.append(prop_v1_time)
+            all_v2_prop_times.append(prop_v2_time)
+            all_v1_vertices.append(vert_v1)
+            all_v2_vertices.append(vert_v2)
+            all_v1_transitions.append(trans_v1)
+            all_v2_transitions.append(trans_v2)
+
+            total_v1_trans_time += trans_v1_time
+            total_v2_trans_time += trans_v2_time
+            total_v1_prop_time += prop_v1_time
+            total_v2_prop_time += prop_v2_time
+            total_v1_vertices += vert_v1
+            total_v2_vertices += vert_v2
+            total_v1_transitions += trans_v1
+            total_v2_transitions += trans_v2
+            i += 1
+        finally:
+            signal.alarm(0)"""
+
+    avg_v1_trans = total_v1_trans_time / max(len(all_v1_trans_times), 1)
+    avg_v2_trans = total_v2_trans_time / max(len(all_v2_trans_times), 1)
+    avg_v1_prop = total_v1_prop_time / max(len(all_v1_prop_times), 1)
+    avg_v2_prop = total_v2_prop_time / max(len(all_v2_prop_times), 1)
+
+    if (avg_v1_trans + avg_v1_prop) < (avg_v2_trans + avg_v2_prop):
+        output += f"Version1 is faster.\n\tTransformation Delta: {avg_v1_trans - avg_v2_trans:.4f}\n\tProperty Delta: {avg_v1_prop - avg_v2_prop:.4f}\n"
+        if print_result:
+            print(
+                f"Version1 is faster.\n\tTransformation Delta: {avg_v1_trans - avg_v2_trans:.4f}\n\tProperty Delta: {avg_v1_prop - avg_v2_prop:.4f}\n")
+        if write:
+            with open(result_path, "w") as f:
+                f.write(output)
+    else:
+        output += f"Version2 is faster.\n\tTransformation Delta: {avg_v2_trans - avg_v1_trans:.4f}\n\tProperty Delta: {avg_v2_prop - avg_v1_prop:.4f}\n"
+        if print_result:
+            print(
+                f"Version2 is faster.\n\tTransformation Delta: {avg_v2_trans - avg_v1_trans:.4f}\n\tProperty Delta: {avg_v2_prop - avg_v1_prop:.4f}\n")
+        if write:
+            with open(result_path, "w") as f:
+                f.write(output)
+
+    return all_v1_trans_times, all_v2_trans_times, all_v1_prop_times, all_v2_prop_times, all_v1_vertices, all_v2_vertices, all_v1_transitions, all_v2_transitions, ("ex", ssg_type, size_param, time_per_iteration)
+
+
+def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: list[float], all_v1_prop_times: list[float], all_v2_prop_times: list[float], all_v1_vertices: list[int], all_v2_vertices: list[int], all_v1_transitions: list[int], all_v2_transitions: list[int], benchmark_info: tuple[str, str, int, int], show_times: bool = True, show_stats: bool = True, plot_name: str = None, save_plots: bool = False, use_global_path: bool = True, debug: bool = GLOBAL_DEBUG) -> None:
     """
     Plot the benchmark results
     :param all_v1_trans_times: List of all transformation times for version 1
@@ -427,8 +802,8 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
     :type all_v1_transitions: [int]
     :param all_v2_transitions: List of all transitions counts for version 2
     :type all_v2_transitions: [int]
-    :param benchmark_info: Tuple containing the benchmark information (ssg_type, ssg_count, size_param)
-    :type benchmark_info: (str, int, int)
+    :param benchmark_info: Tuple containing the benchmark information
+    :type benchmark_info: (str, str, int, int)
     :param show_times: Whether to show the transformation and property checking times plot
     :type show_times: bool
     :param show_stats: Whether to show the statistics plot
@@ -442,7 +817,8 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
     :param debug: Whether to print debug information
     :type debug: bool
     """
-    matplotlib.use("TkAgg")
+    with contextlib.redirect_stdout(io.StringIO()):
+        matplotlib.use("TkAgg")
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -498,7 +874,13 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
             better_v1_t_count += 1
 
     if plot_name is None:
-        plot_name = f"benchmark_results_{benchmark_info[0]}_{benchmark_info[1]}_{benchmark_info[2]}"
+        if benchmark_info[0] == "norm":
+            plot_name = f"benchmark_results_normal_{benchmark_info[1]}_{benchmark_info[2]}_{benchmark_info[3]}"
+        elif benchmark_info[0] == "ex":
+            plot_name = f"benchmark_results_exponential_{benchmark_info[1]}_{benchmark_info[2]}_{benchmark_info[3]}"
+        else:
+            raise ValueError(f"Unknown benchmark type: {benchmark_info[0]}. Expected \'norm\' or \'ex\'.")
+
 
     fig, axs = plt.subplots(1, 2, figsize=(12, 6), num=plot_name + "_time_comparison")
     fig.suptitle("Benchmark Transformation vs. Property Checking Time")
@@ -583,7 +965,7 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
     if save_plots:
         filename = f"{plot_name}_stats_combined.png"
         if use_global_path:
-            filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename)
+            filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", "exponential", filename)
         fig_stat.savefig(filename)
 
     if not show_stats:
@@ -591,6 +973,7 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
 
     if show_times or show_stats:
         plt.show()
+
 
 #p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_multiple_ssgs(100, "random", size_param=500, use_global_path=True, debug=True, force=True, print_result=False, write=False)
 #plot_benchmark_results(p1, p2, p3, p4, p5, p6, p7, p8, benchmark_info=info, use_global_path=True, save_plots=True, show_times=False, show_stats=False)
@@ -604,3 +987,114 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
 #plot_benchmark_results(p1, p2, p3, p4, p5, p6, p7, p8, benchmark_info=info, use_global_path=True, save_plots=True, show_times=False, show_stats=False)
 #p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_multiple_ssgs(100, "empty", size_param=500, use_global_path=True, debug=True, force=True, print_result=False, write=False)
 #plot_benchmark_results(p1, p2, p3, p4, p5, p6, p7, p8, benchmark_info=info, use_global_path=True, save_plots=True, show_times=False, show_stats=False)
+
+
+def main():
+    p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
+        "random",
+        time_per_iteration=900,
+        use_global_path=True,
+        debug=True,
+        force=True,
+        print_result=False,
+        write=False
+    )
+    plot_benchmark_results(
+        p1, p2, p3, p4, p5, p6, p7, p8,
+        benchmark_info=info,
+        use_global_path=True,
+        save_plots=True,
+        show_times=True,
+        show_stats=True
+    )
+    p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
+        "random_no_additional_selfloops",
+        time_per_iteration=900,
+        use_global_path=True,
+        debug=True,
+        force=True,
+        print_result=False,
+        write=False
+    )
+    plot_benchmark_results(
+        p1, p2, p3, p4, p5, p6, p7, p8,
+        benchmark_info=info,
+        use_global_path=True,
+        save_plots=True,
+        show_times=True,
+        show_stats=True
+    )
+    p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
+        "binary",
+        time_per_iteration=900,
+        use_global_path=True,
+        debug=True,
+        force=True,
+        print_result=False,
+        write=False
+    )
+    plot_benchmark_results(
+        p1, p2, p3, p4, p5, p6, p7, p8,
+        benchmark_info=info,
+        use_global_path=True,
+        save_plots=True,
+        show_times=True,
+        show_stats=True
+    )
+    p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
+        "complete",
+        time_per_iteration=900,
+        use_global_path=True,
+        debug=True,
+        force=True,
+        print_result=False,
+        write=False
+    )
+    plot_benchmark_results(
+        p1, p2, p3, p4, p5, p6, p7, p8,
+        benchmark_info=info,
+        use_global_path=True,
+        save_plots=True,
+        show_times=True,
+        show_stats=True
+    )
+    p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
+        "chain",
+        time_per_iteration=900,
+        use_global_path=True,
+        debug=True,
+        force=True,
+        print_result=False,
+        write=False
+    )
+    plot_benchmark_results(
+        p1, p2, p3, p4, p5, p6, p7, p8,
+        benchmark_info=info,
+        use_global_path=True,
+        save_plots=True,
+        show_times=True,
+        show_stats=True
+    )
+    p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
+        "empty",
+        time_per_iteration=900,
+        use_global_path=True,
+        debug=True,
+        force=True,
+        print_result=False,
+        write=False
+    )
+    plot_benchmark_results(
+        p1, p2, p3, p4, p5, p6, p7, p8,
+        benchmark_info=info,
+        use_global_path=True,
+        save_plots=True,
+        show_times=True,
+        show_stats=True
+    )
+
+
+if __name__ == '__main__':
+    import multiprocessing
+    multiprocessing.freeze_support()  # Optional, hilft bei frozen executables
+    main()

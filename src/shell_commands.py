@@ -1,6 +1,6 @@
 import subprocess
 from error_handling import print_error
-from settings import *
+from settings import GLOBAL_DEBUG
 
 
 def run_command(command_list, use_shell=False, debug=GLOBAL_DEBUG):
@@ -14,5 +14,6 @@ def run_command(command_list, use_shell=False, debug=GLOBAL_DEBUG):
             print(result.stdout)
         return result
     except subprocess.CalledProcessError:
-        print_error(f"Could not execute command {' '.join(command_list)}.")
+        # if debug:
+        print_error(f"Command {' '.join(command_list)} failed with error: {result.stderr}")
         return None

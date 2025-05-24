@@ -2,7 +2,7 @@ import sys
 import re
 import os
 import time
-from settings import *
+from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH, PRINT_VERTEX_CREATION_WARNINGS, ENSURE_EVE_AND_ADAM_VERTICES
 from error_handling import print_warning, print_error, print_debug, is_float_expr, float_or_fraction
 
 
@@ -94,6 +94,22 @@ class SimpleStochasticGame:
         self.transitions = transitions
         self.init_vertex = init_vertex
 
+        if ENSURE_EVE_AND_ADAM_VERTICES:
+            has_eve = False
+            has_adam = False
+            for vertex in self.vertices.values():
+                if vertex.is_eve:
+                    has_eve = True
+                else:
+                    has_adam = True
+            if not has_eve:
+                self.add_extra_vert(is_eve=True, is_target=False)#
+                if GLOBAL_DEBUG:
+                    print_debug("No Eve vertex was found. An extra Eve vertex was added.")
+            if not has_adam:
+                self.add_extra_vert(is_eve=False, is_target=False)
+                if GLOBAL_DEBUG:
+                    print_debug("No Adam vertex was found. An extra Adam vertex was added.")
         for vertex in self.vertices.values():
             if GLOBAL_DEBUG and PRINT_VERTEX_CREATION_WARNINGS and not has_ssg_vertex_ingoing_transition(vertex, self.transitions):
                 print_debug(f"Vertex {vertex.name} has no ingoing transition.")
