@@ -6,6 +6,16 @@ from src.simplestochasticgame import SimpleStochasticGame, SsgVertex, SsgTransit
 
 
 def max_denom_and_min_prob(spg: SimpleParityGame, max_d: int=10_000) -> (float, int):
+    """
+    Computes the minimum probability and the maximum denominator of the transition probabilities in a SimpleParityGame.
+    This is used to compute the alphas for the conversion to a SimpleStochasticGame.
+    :param spg: The SimpleParityGame to analyze
+    :type spg: SimpleParityGame
+    :param max_d: The maximum denominator to consider for the fractions, defaults to 10_000
+    :type max_d: int
+    :return: minimum probability and maximum denominator
+    :rtype: (float, int)
+    """
     floats = set()
     for transition in spg.transitions.values():
         for prob, vert in transition.end_vertices:

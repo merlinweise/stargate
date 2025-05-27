@@ -425,6 +425,16 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, writ
 def _iteration_worker(q, ssg_type, i, debug, use_global_path):
     """
     Worker function to run a single benchmark iteration and return results via Queue.
+    :param q: Queue to put the results into
+    :type q: Queue
+    :param ssg_type: Type of SSG to create (random, binary, empty)
+    :type ssg_type: str
+    :param i: Index of the SSG to create
+    :type i: int
+    :param debug: Whether to print debug information
+    :type debug: bool
+    :param use_global_path: Whether to use the global path for the SMG file
+    :type use_global_path: bool
     """
     try:
         result = single_iteration_for_exponential_benchmark(ssg_type, i, debug, use_global_path)
@@ -434,6 +444,7 @@ def _iteration_worker(q, ssg_type, i, debug, use_global_path):
 
 
 def single_iteration_for_exponential_benchmark(ssg_type: str, i: int, debug: bool = GLOBAL_DEBUG, use_global_path: bool = True) -> tuple[float, float, float, float, int, int, int, int, str, str, int]:
+
     if ssg_type == "binary":
         size_param = i + 2
     else:
@@ -568,7 +579,6 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, wri
                     pass
             break
 
-        # Get result from the Queue
         try:
             result = q.get_nowait()
         except pyqueue.Empty:
@@ -836,21 +846,10 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
         plt.show()
 
 
-#p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_multiple_ssgs(100, "random", size_param=500, use_global_path=True, debug=True, force=True, print_result=False, write=False)
-#plot_benchmark_results(p1, p2, p3, p4, p5, p6, p7, p8, benchmark_info=info, use_global_path=True, save_plots=True, show_times=False, show_stats=False)
-#p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_multiple_ssgs(100, "random_no_additional_selfloops", size_param=500, use_global_path=True, debug=True, force=True, print_result=False, write=False)
-#plot_benchmark_results(p1, p2, p3, p4, p5, p6, p7, p8, benchmark_info=info, use_global_path=True, save_plots=True, show_times=False, show_stats=False)
-#p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_multiple_ssgs(100, "binary", size_param=9, use_global_path=True, debug=True, force=True, print_result=False, write=False)
-#plot_benchmark_results(p1, p2, p3, p4, p5, p6, p7, p8, benchmark_info=info, use_global_path=True, save_plots=True, show_times=False, show_stats=False)
-#p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_multiple_ssgs(100, "complete", size_param=100, use_global_path=True, debug=True, force=True, print_result=False, write=False)
-#plot_benchmark_results(p1, p2, p3, p4, p5, p6, p7, p8, benchmark_info=info, use_global_path=True, save_plots=True, show_times=False, show_stats=False)
-#p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_multiple_ssgs(100, "chain", size_param=500, use_global_path=True, debug=True, force=True, print_result=False, write=False)
-#plot_benchmark_results(p1, p2, p3, p4, p5, p6, p7, p8, benchmark_info=info, use_global_path=True, save_plots=True, show_times=False, show_stats=False)
-#p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_multiple_ssgs(100, "empty", size_param=500, use_global_path=True, debug=True, force=True, print_result=False, write=False)
-#plot_benchmark_results(p1, p2, p3, p4, p5, p6, p7, p8, benchmark_info=info, use_global_path=True, save_plots=True, show_times=False, show_stats=False)
-
-
 def main():
+    """
+    Main function to run the benchmark for different SSG types.
+    """
     p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
         "random",
         time_per_iteration=1800,

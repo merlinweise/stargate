@@ -14,7 +14,6 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
         start_time = time.time()
     content = "smg\n\n"
     if version1:
-        old_ssg = ssg
         ssg = copy.deepcopy(ssg)
         i = 1
         while True:
@@ -67,7 +66,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
                             new_end_verts.add((prob, vert))
                     additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, new_end_verts, transition.action))
         ssg.transitions |= additional_ssg_transitions
-        if not sanity_check_alternating_verts(ssg):
+        if not sanity_check_alternating_vertices(ssg):
             print_warning("The SSG is not alternating. The generated SMG may not be correct.")
         new_vertices: dict[SsgVertex, tuple[int, int]] = dict()
         ssg_eve_actions: set[str] = set()
@@ -217,7 +216,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
             randa_extra = " & ra=0"
         for transition in new_transitions:
             if transition.start_vertex.is_eve:
-                if not is_ssg_state_probabilistic(ssg, transition.start_vertex):
+                if not is_ssg_vertex_probabilistic(ssg, transition.start_vertex):
                     eve_mod += (f"\t[{new_eve_actions[transition.action]}] (e1={new_transitions[transition][0][0]} & e2={new_transitions[transition][0][1]}" + rande_extra + f") \t-> (e1'={next(iter(new_transitions[transition][2]))[1][0]}) & (e2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n")
                     adam_mod += (f"\t[{new_eve_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]}" + rande_extra + f") \t-> (a1'={next(iter(new_transitions[transition][2]))[1][0]}) & (a2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n")
                 else:
@@ -232,7 +231,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
                         eve_mod = eve_mod[:-3] + " ;\n"
                         adam_mod += f"\t[{new_eve_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]} & re=0) \t-> true ;\n"
             else:
-                if not is_ssg_state_probabilistic(ssg, transition.start_vertex):
+                if not is_ssg_vertex_probabilistic(ssg, transition.start_vertex):
                     adam_mod += (f"\t[{new_adam_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]}" + randa_extra + f") \t-> (a1'={next(iter(new_transitions[transition][2]))[1][0]}) & (a2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n")
                     eve_mod += (f"\t[{new_adam_actions[transition.action]}] (e1={new_transitions[transition][0][0]} & e2={new_transitions[transition][0][1]}" + rande_extra + f") \t-> (e1'={next(iter(new_transitions[transition][2]))[1][0]}) & (e2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n")
                 else:
@@ -269,7 +268,16 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
     return content
 
 
-def is_ssg_state_probabilistic(ssg: SimpleStochasticGame, state: SsgVertex) -> bool:
+def is_ssg_vertex_probabilistic(ssg: SimpleStochasticGame, state: SsgVertex) -> bool:
+    """
+    Checks if the given state in the SimpleStochasticGame has probabilistic transitions.
+    This is used to determine if the state has multiple end vertices with different probabilities.
+    Needed for version 2 of the SMG specification.
+    :param ssg: The SimpleStochasticGame to check.
+    :type ssg: SimpleStochasticGame
+    :param state:
+    :return:
+    """
     result = False
     for transition in ssg.transitions.values():
         if transition.start_vertex == state:
@@ -280,6 +288,14 @@ def is_ssg_state_probabilistic(ssg: SimpleStochasticGame, state: SsgVertex) -> b
 
 
 def has_eve_probabilistic_actions(ssg: SimpleStochasticGame) -> bool:
+    """
+    Checks if the SimpleStochasticGame has any probabilistic actions for Eve.
+    Needed for version 2 of the SMG specification.
+    :param ssg: The SimpleStochasticGame to check.
+    :type ssg: SimpleStochasticGame
+    :return: True if Eve has probabilistic actions, False otherwise.
+    :rtype: bool
+    """
     result = False
     for transition in ssg.transitions.values():
         if transition.start_vertex.is_eve and len(transition.end_vertices) > 1:
@@ -289,6 +305,14 @@ def has_eve_probabilistic_actions(ssg: SimpleStochasticGame) -> bool:
 
 
 def has_adam_probabilistic_actions(ssg: SimpleStochasticGame) -> bool:
+    """
+    Checks if the SimpleStochasticGame has any probabilistic actions for Adam.
+    Needed for version 2 of the SMG specification.
+    :param ssg: The SimpleStochasticGame to check.
+    :type ssg: SimpleStochasticGame
+    :return: True if Adam has probabilistic actions, False otherwise.
+    :rtype: bool
+    """
     result = False
     for transition in ssg.transitions.values():
         if not transition.start_vertex.is_eve and len(transition.end_vertices) > 1:
@@ -297,7 +321,14 @@ def has_adam_probabilistic_actions(ssg: SimpleStochasticGame) -> bool:
     return result
 
 
-def sanity_check_alternating_verts(ssg: SimpleStochasticGame) -> bool:
+def sanity_check_alternating_vertices(ssg: SimpleStochasticGame) -> bool:
+    """
+    Checks if the SSG is alternating, meaning that transitions from eve vertices lead to adam vertices and vice versa.
+    :param ssg: The SimpleStochasticGame to check.
+    :type ssg: SimpleStochasticGame
+    :return: True if the SSG is alternating, False otherwise.
+    :rtype: bool
+    """
     result = True
     for transition in ssg.transitions.values():
         if len(transition.end_vertices) == 1 and transition.start_vertex == next(iter(transition.end_vertices))[1]:
