@@ -45,15 +45,23 @@ def compute_alphas_for_spg(spg: SimpleParityGame, epsilon: float = None, max_d: 
     return alphas
 
 
-def spg_to_ssg(spg: SimpleParityGame, epsilon: float = None) -> SimpleStochasticGame:
+def spg_to_ssg(spg: SimpleParityGame, epsilon: float = None, print_alphas: bool = False) -> SimpleStochasticGame:
     """
     Converts a SimpleParityGame to a SimpleStochasticGame.
     :param spg: The SimpleParityGame to convert
     :type spg: SimpleParityGame
+    :param epsilon: The epsilon value for the conversion, if None, it will be computed based on the game
+    :type epsilon: float, optional
+    :param print_alphas: Whether to print the computed alphas, defaults to False
+    :type print_alphas: bool, optional
     :return: The converted SimpleStochasticGame
     :rtype: SimpleStochasticGame
     """
     alphas = compute_alphas_for_spg(spg, epsilon=epsilon)
+    if print_alphas:
+        print("Computed alphas:")
+        for k, v in alphas.items():
+            print(f"Priority {k}: {v}")
     vertices: dict[str, SsgVertex] = dict()
     transitions: dict[tuple[SsgVertex, str], SsgTransition] = dict()
     respective_spg_ssg_vertixes: dict[SpgVertex, SsgVertex] = dict()
@@ -108,9 +116,11 @@ def spg_to_ssg(spg: SimpleParityGame, epsilon: float = None) -> SimpleStochastic
 
 
 
-spg = read_spg_from_file("test_1.spg", use_global_path=True)
-ssg = spg_to_ssg(spg, epsilon=1e-100)
-from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability
-smgspec = ssg_to_smgspec(ssg)
-save_smg_file(smgspec, "test_1.smg", use_global_path=True, force=True)
-check_target_reachability("test_1.smg", use_global_path=True, print_probabilities=True, debug=True)
+spg = read_spg_from_file("raphael3.spg", use_global_path=True)
+ssg = spg_to_ssg(spg, epsilon=1e-4, print_alphas=True)
+from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability, create_dot_file, create_png_file
+smgspec = ssg_to_smgspec(ssg, version1=True, print_correspondingvertices=True)
+save_smg_file(smgspec, "raphael3.smg", use_global_path=True, force=True)
+# create_dot_file("raphael3.smg", use_global_path=True, debug=True, force=True)
+# create_png_file("raphael3.dot", use_global_path=True, force=True)
+check_target_reachability("raphael3.smg", use_global_path=True, print_probabilities=True, debug=True)

@@ -9,7 +9,7 @@ from error_handling import print_warning, print_debug
 from settings import *
 
 
-def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: bool = GLOBAL_DEBUG) -> str:
+def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: bool = GLOBAL_DEBUG, print_correspondingvertices: bool = False) -> str:
     if debug:
         start_time = time.time()
     content = "smg\n\n"
@@ -83,6 +83,11 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
             else:
                 new_vertices[vert] = (0, adam_vert_count)
                 adam_vert_count += 1
+
+        if print_correspondingvertices:
+            print("Corresponding vertices:")
+            for vert in ssg.vertices.values():
+                print(f"{vert.name} -> {new_vertices[vert]}")
         new_init_vertex = new_vertices[ssg.init_vertex]
         for transition in ssg.transitions.values():
             if transition.start_vertex.is_eve:
@@ -160,6 +165,10 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
             else:
                 new_vertices[vert] = (0, adam_vert_count)
                 adam_vert_count += 1
+        if print_correspondingvertices:
+            print("Corresponding vertices:")
+            for vert in ssg.vertices.values():
+                print(f"{vert.name} -> {new_vertices[vert]}")
         new_init_vertex = new_vertices[ssg.init_vertex]
         for transition in ssg.transitions.values():
             if transition.start_vertex.is_eve:
@@ -310,8 +319,8 @@ def check_property(smg_file, property_string, debug: bool = GLOBAL_DEBUG) -> flo
     if debug:
         start_time = time.time()
     smg_file = os.path.join(GLOBAL_IN_OUT_PATH, smg_file)
-    command = ["prism", smg_file, "-pf", property_string, "-maxiters", "1000000000"]
-    result = run_command(command, use_shell=True, )
+    command = ["prism", smg_file, "-pf", property_string, "-maxiters", "1000000000", "-epsilon", str(PRISM_EPSILON)]
+    result = run_command(command, use_shell=True)
     output = result.stdout
     match = re.search(r'Result:\s*(\d\.\d+(E-\d+)?)', output)
     if match:
