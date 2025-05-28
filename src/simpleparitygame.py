@@ -1,9 +1,9 @@
 import re
-import os
+import posixpath
 import time
-from src.settings import *
+from settings import *
 from error_handling import print_warning, print_error, print_debug, is_float_expr, float_or_fraction
-
+from shell_commands import path_exists, get_linux_path_size, write_linux_file, read_linux_file_lines
 
 class SpgVertex:
 
@@ -144,12 +144,11 @@ def read_spg_from_file(file_name: str, use_global_path: bool = False, debug: boo
     if debug:
         start_time = time.time()
     if use_global_path:
-        file_name = os.path.join(GLOBAL_IN_OUT_PATH, file_name)
+        file_name = posixpath.join(GLOBAL_IN_OUT_PATH, file_name)
     if file_name[-4:] != ".spg":
         print_error("Not a .spg file")
     try:
-        with open(file_name, "r", encoding="utf-8") as file:
-            content = file.readlines()
+        content = read_linux_file_lines(file_name)
     except FileNotFoundError:
         print_error(f"File '{file_name}' not found.")
     except Exception as e:
@@ -351,16 +350,14 @@ def save_spg_file(spg_spec: str, file_name: str = "", use_global_path: bool = Fa
     if not file_name:
         file_name = "out.spg"
     if use_global_path:
-        file_name = os.path.join(GLOBAL_IN_OUT_PATH, file_name)
-    if not os.path.exists(os.path.dirname(file_name)):
-        os.makedirs(os.path.dirname(file_name))
+        file_name = posixpath.join(GLOBAL_IN_OUT_PATH, file_name)
     if not file_name.endswith(".spg"):
         print_warning(f"File {file_name} is not an .spg file. Nothing was changed")
-    elif not force and os.path.exists(file_name) and os.path.getsize(file_name) != 0:
+    elif not force and path_exists(file_name) and get_linux_path_size(file_name) != 0:
         print_warning(f"File {file_name} already exists. Nothing was changed")
     else:
-        with open(file_name, "w", encoding="utf-8") as file:
-            file.write(spg_spec)
+        write_linux_file(file_name, spg_spec)
+
     if debug:
         print_debug(f"SPG file {file_name} created in {(time.time() - start_time):.6f} seconds")
 
@@ -380,7 +377,7 @@ def reformat_spgspec(file_name: str, use_global_path: bool = False, force: bool 
     if debug:
         start_time = time.time()
     if use_global_path:
-        file_name = os.path.join(GLOBAL_IN_OUT_PATH, file_name)
+        file_name = posixpath.join(GLOBAL_IN_OUT_PATH, file_name)
     spg = read_spg_from_file(file_name=file_name, use_global_path=use_global_path, debug=False)
     content = spg_to_spgspec(spg)
     save_spg_file(spg_spec=content, file_name=file_name, use_global_path=use_global_path, force=force, debug=False)

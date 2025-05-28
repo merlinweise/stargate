@@ -1,17 +1,19 @@
 import random
 import matplotlib
-import os
+import posixpath
 import time
 import re
 import contextlib
 import io
 from multiprocessing import Process, Queue
 import queue as pyqueue  # to handle Empty exception
+
+from src.settings import PRISM_PATH
 from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability
 from simplestochasticgame import SsgVertex, SsgTransition, SimpleStochasticGame, is_deadlock_vertex
 from error_handling import print_error, print_debug
 from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH
-from shell_commands import run_command
+from shell_commands import run_command, path_exists, get_linux_path_size, remove_file, write_linux_file, sh_escape
 
 
 def create_random_ssg(number_of_vertices: int, number_of_transitions: int, number_of_target_vertices: int, no_additional_selfloops: bool = False, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
@@ -224,13 +226,12 @@ def check_smg_stats(smg_file: str, debug: bool = GLOBAL_DEBUG, use_global_path: 
     :type use_global_path: bool
     """
     if use_global_path:
-        smg_file = os.path.join(GLOBAL_IN_OUT_PATH, smg_file)
-    if not os.path.exists(smg_file):
+        smg_file = posixpath.join(GLOBAL_IN_OUT_PATH, smg_file)
+    if not path_exists(smg_file):
         print_error(f"SMG file {smg_file} does not exist.")
-
-    command = ["prism", smg_file, "-noprobchecks"]
+    command = f"{sh_escape(PRISM_PATH)} {sh_escape(smg_file)} -noprobchecks"
     if debug:
-        print_debug(f"Running command: {' '.join(command)}")
+        print_debug(f"Running command: {command}")
     result = run_command(command, use_shell=True)
     if result.returncode != 0:
         print_error(f"Error running command: {result.stderr}")
@@ -315,9 +316,9 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, writ
     if result_path is None:
         result_path = f"benchmark_results_normal_{ssg_count}_{ssg_type}_{size_param}.txt"
     if use_global_path:
-        result_path = os.path.join(GLOBAL_IN_OUT_PATH, result_path)
+        result_path = posixpath.join(GLOBAL_IN_OUT_PATH, result_path)
     if write is None:
-        write = False if not force and os.path.exists(result_path) and os.path.getsize(result_path) > 0 else True
+        write = False if not force and path_exists(result_path) and get_linux_path_size(result_path) > 0 else True
     output = ""
     if debug:
         match ssg_type:
@@ -369,15 +370,15 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, writ
         vert_v2, trans_v2, build_time2 = check_smg_stats(f"ssg_{i + 1}_v2.smg", use_global_path=True)
 
         if use_global_path:
-            smg_v1_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i+1}_v1.smg")
-            smg_v2_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i+1}_v2.smg")
+            smg_v1_path = posixpath.join(GLOBAL_IN_OUT_PATH, f"ssg_{i+1}_v1.smg")
+            smg_v2_path = posixpath.join(GLOBAL_IN_OUT_PATH, f"ssg_{i+1}_v2.smg")
         else:
             smg_v1_path = f"ssg_{i+1}_v1.smg"
             smg_v2_path = f"ssg_{i+1}_v2.smg"
         if trans_v1_time == 0.0 or trans_v2_time == 0.0 or prop_v1_time == 0.0 or prop_v2_time == 0.0:
             print_error(f"Error: Transformation or property checking time is 0.0 for SSG {i+1}.")
-        os.remove(smg_v1_path)
-        os.remove(smg_v2_path)
+        remove_file(smg_v1_path)
+        remove_file(smg_v2_path)
 
         all_v1_trans_times.append(trans_v1_time)
         all_v2_trans_times.append(trans_v2_time)
@@ -409,15 +410,14 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, writ
         if print_result:
             print(f"Version1 is faster.\n\tTransformation Delta: {avg_v1_trans-avg_v2_trans:.4f}\n\tProperty Delta: {avg_v1_prop-avg_v2_prop:.4f}\n")
         if write:
-            with open(result_path, "w") as f:
-                f.write(output)
+            write_linux_file(result_path, output)
+
     else:
         output += f"Version2 is faster.\n\tTransformation Delta: {avg_v2_trans-avg_v1_trans:.4f}\n\tProperty Delta: {avg_v2_prop-avg_v1_prop:.4f}\n"
         if print_result:
             print(f"Version2 is faster.\n\tTransformation Delta: {avg_v2_trans-avg_v1_trans:.4f}\n\tProperty Delta: {avg_v2_prop-avg_v1_prop:.4f}\n")
         if write:
-            with open(result_path, "w") as f:
-                f.write(output)
+            write_linux_file(result_path, output)
 
     return all_v1_trans_times, all_v2_trans_times, all_v1_prop_times, all_v2_prop_times, all_v1_vertices, all_v2_vertices, all_v1_transitions, all_v2_transitions, ("norm", ssg_type, ssg_count, size_param)
 
@@ -483,8 +483,8 @@ def single_iteration_for_exponential_benchmark(ssg_type: str, i: int, debug: boo
     vert_v2, trans_v2, build_time2 = check_smg_stats(f"ssg_{i + 1}_v2.smg", use_global_path=use_global_path)
 
     if use_global_path:
-        smg_v1_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v1.smg")
-        smg_v2_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v2.smg")
+        smg_v1_path = posixpath.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v1.smg")
+        smg_v2_path = posixpath.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v2.smg")
     else:
         smg_v1_path = f"ssg_{i + 1}_v1.smg"
         smg_v2_path = f"ssg_{i + 1}_v2.smg"
@@ -535,9 +535,9 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, wri
     if result_path is None:
         result_path = f"benchmark_results_exponential_{ssg_type}_max_{time_per_iteration}.txt"
     if use_global_path:
-        result_path = os.path.join(GLOBAL_IN_OUT_PATH, result_path)
+        result_path = posixpath.join(GLOBAL_IN_OUT_PATH, result_path)
     if write is None:
-        write = False if not force and os.path.exists(result_path) and os.path.getsize(result_path) > 0 else True
+        write = False if not force and path_exists(result_path) and get_linux_path_size(result_path) > 0 else True
     output = ""
     if debug:
         match ssg_type:
@@ -574,7 +574,7 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, wri
             p.join()
             for path in [f"ssg_{i + 1}_v1.smg", f"ssg_{i + 1}_v2.smg"]:
                 try:
-                    os.remove(os.path.join(GLOBAL_IN_OUT_PATH, path) if use_global_path else path)
+                    remove_file(posixpath.join(GLOBAL_IN_OUT_PATH, path) if use_global_path else path)
                 except FileNotFoundError:
                     pass
             break
@@ -603,8 +603,8 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, wri
 
         # Remove temporary .smg files
         try:
-            os.remove(smg_v1_path)
-            os.remove(smg_v2_path)
+            remove_file(smg_v1_path)
+            remove_file(smg_v2_path)
         except FileNotFoundError:
             pass
 
@@ -640,16 +640,14 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, wri
             print(
                 f"Version1 is faster.\n\tTransformation Delta: {avg_v1_trans - avg_v2_trans:.4f}\n\tProperty Delta: {avg_v1_prop - avg_v2_prop:.4f}\n")
         if write:
-            with open(result_path, "w") as f:
-                f.write(output)
+            write_linux_file(result_path, output)
     else:
         output += f"Version2 is faster.\n\tTransformation Delta: {avg_v2_trans - avg_v1_trans:.4f}\n\tProperty Delta: {avg_v2_prop - avg_v1_prop:.4f}\n"
         if print_result:
             print(
                 f"Version2 is faster.\n\tTransformation Delta: {avg_v2_trans - avg_v1_trans:.4f}\n\tProperty Delta: {avg_v2_prop - avg_v1_prop:.4f}\n")
         if write:
-            with open(result_path, "w") as f:
-                f.write(output)
+            write_linux_file(result_path, output)
 
     return all_v1_trans_times, all_v2_trans_times, all_v1_prop_times, all_v2_prop_times, all_v1_vertices, all_v2_vertices, all_v1_transitions, all_v2_transitions, ("ex", ssg_type, size_param, time_per_iteration)
 
@@ -793,7 +791,7 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
     if save_plots:
         filename = f"{plot_name}_times_combined.png"
         if use_global_path:
-            filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", "exponential", filename)
+            filename = posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", "exponential", filename)
         fig.savefig(filename)
 
     if not show_times:
@@ -836,7 +834,7 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
     if save_plots:
         filename = f"{plot_name}_stats_combined.png"
         if use_global_path:
-            filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", "exponential", filename)
+            filename = posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", "exponential", filename)
         fig_stat.savefig(filename)
 
     if not show_stats:

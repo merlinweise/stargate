@@ -126,11 +126,11 @@ def spg_to_ssg(spg: SimpleParityGame, epsilon: float = None, print_alphas: bool 
 
 
 
-spg = read_spg_from_file("raphael3.spg", use_global_path=True)
-ssg = spg_to_ssg(spg, epsilon=1e-4, print_alphas=True)
+spg = read_spg_from_file("raphael2.spg", use_global_path=True)
+ssg = spg_to_ssg(spg,  print_alphas=True)
 from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability, create_dot_file, create_png_file
 smgspec = ssg_to_smgspec(ssg, version1=True, print_correspondingvertices=True)
-save_smg_file(smgspec, "raphael3.smg", use_global_path=True, force=True)
+save_smg_file(smgspec, "raphael2.smg", use_global_path=True, force=True)
 # create_dot_file("raphael3.smg", use_global_path=True, debug=True, force=True)
 # create_png_file("raphael3.dot", use_global_path=True, force=True)
-check_target_reachability("raphael3.smg", use_global_path=True, print_probabilities=True, debug=True)
+check_target_reachability("raphael2.smg", use_global_path=True, print_probabilities=True, debug=True)

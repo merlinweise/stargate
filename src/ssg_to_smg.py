@@ -1,10 +1,9 @@
 import copy
-import platform
 import time
 import re
-import os
+import posixpath
 from simplestochasticgame import SimpleStochasticGame, SsgTransition, SsgVertex
-from shell_commands import run_command
+from shell_commands import run_command, path_exists, get_linux_path_size, write_linux_file, sh_escape
 from error_handling import print_warning, print_debug
 from settings import *
 
@@ -278,13 +277,12 @@ def is_ssg_vertex_probabilistic(ssg: SimpleStochasticGame, state: SsgVertex) -> 
     :param state:
     :return:
     """
-    result = False
     for transition in ssg.transitions.values():
         if transition.start_vertex == state:
             if len(transition.end_vertices) > 1:
-                result = True
+                return True
                 break
-    return result
+    return False
 
 
 def has_eve_probabilistic_actions(ssg: SimpleStochasticGame) -> bool:
@@ -296,12 +294,11 @@ def has_eve_probabilistic_actions(ssg: SimpleStochasticGame) -> bool:
     :return: True if Eve has probabilistic actions, False otherwise.
     :rtype: bool
     """
-    result = False
     for transition in ssg.transitions.values():
         if transition.start_vertex.is_eve and len(transition.end_vertices) > 1:
-            result = True
+            return True
             break
-    return result
+    return False
 
 
 def has_adam_probabilistic_actions(ssg: SimpleStochasticGame) -> bool:
@@ -313,12 +310,11 @@ def has_adam_probabilistic_actions(ssg: SimpleStochasticGame) -> bool:
     :return: True if Adam has probabilistic actions, False otherwise.
     :rtype: bool
     """
-    result = False
     for transition in ssg.transitions.values():
         if not transition.start_vertex.is_eve and len(transition.end_vertices) > 1:
-            result = True
+            return True
             break
-    return result
+    return False
 
 
 def sanity_check_alternating_vertices(ssg: SimpleStochasticGame) -> bool:
@@ -329,7 +325,6 @@ def sanity_check_alternating_vertices(ssg: SimpleStochasticGame) -> bool:
     :return: True if the SSG is alternating, False otherwise.
     :rtype: bool
     """
-    result = True
     for transition in ssg.transitions.values():
         if len(transition.end_vertices) == 1 and transition.start_vertex == next(iter(transition.end_vertices))[1]:
             continue
@@ -337,20 +332,20 @@ def sanity_check_alternating_vertices(ssg: SimpleStochasticGame) -> bool:
             for prob, vert in transition.end_vertices:
                 if vert.is_eve:
                     print_warning(f"Transition from {transition.start_vertex.name} to {vert.name} is neither alternating nor a self-loop.")
-                    result = False
+                    return False
         else:
             for prob, vert in transition.end_vertices:
                 if not vert.is_eve:
                     print_warning(f"Transition from {transition.start_vertex.name} to {vert.name} is neither alternating nor a self-loop.")
-                    result = False
-    return result
+                    return False
+    return True
 
 
 def check_property(smg_file, property_string, debug: bool = GLOBAL_DEBUG) -> float:
     if debug:
         start_time = time.time()
-    smg_file = os.path.join(GLOBAL_IN_OUT_PATH, smg_file)
-    command = ["prism", smg_file, "-pf", property_string, "-maxiters", "1000000000", "-epsilon", str(PRISM_EPSILON)]
+    smg_file = posixpath.join(GLOBAL_IN_OUT_PATH, smg_file)
+    command = f"{sh_escape(PRISM_PATH)} {sh_escape(smg_file)} -pf {sh_escape(property_string)} -maxiters 1000000000 -epsilon {str(PRISM_EPSILON)} {sh_escape(PRISM_SOLVING_ALGORITHM)}"
     result = run_command(command, use_shell=True)
     output = result.stdout
     match = re.search(r'Result:\s*(\d\.\d+(E-\d+)?)', output)
@@ -369,10 +364,10 @@ def check_target_reachability(smg_file: str, print_probabilities: bool = False, 
     if debug:
         start_time = time.time()
     if use_global_path:
-        smg_file = os.path.join(GLOBAL_IN_OUT_PATH, smg_file)
+        smg_file = posixpath.join(GLOBAL_IN_OUT_PATH, smg_file)
     if debug:
         pre_prob1_time = time.time()
-    result1 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmin=? [F \"\"target\"\"]", debug=debug)
+    result1 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmin=? [F \"target\"]", debug=debug)
     if debug:
         print_debug(f"First prob checking time: {(time.time() - pre_prob1_time):.6f}")
     if result1 == -1.0:
@@ -381,7 +376,7 @@ def check_target_reachability(smg_file: str, print_probabilities: bool = False, 
         result = f"Minimum probability of reaching a target state for eve: {str(result1)}\n"
     if debug:
         pre_prob2_time = time.time()
-    result2 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmax=? [F \"\"target\"\"]", debug=debug)
+    result2 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmax=? [F \"target\"]", debug=debug)
     if debug:
         print_debug(f"Second prob checking time: {(time.time() - pre_prob2_time):.6f}")
     if result2 == -1.0:
@@ -401,16 +396,13 @@ def save_smg_file(content: str, file_name: str = "", force: bool = False, debug:
     if not file_name:
         file_name = "out.smg"
     if use_global_path:
-        file_name = os.path.join(GLOBAL_IN_OUT_PATH, file_name)
-    if not os.path.exists(os.path.dirname(file_name)):
-        os.makedirs(os.path.dirname(file_name))
+        file_name = posixpath.join(GLOBAL_IN_OUT_PATH, file_name)
     if not file_name.endswith(".smg"):
         print_warning(f"File {file_name} is not an .smg file. Nothing was changed")
-    elif not force and os.path.exists(file_name) and os.path.getsize(file_name) != 0:
+    elif not force and path_exists(file_name) and get_linux_path_size(file_name) != 0:
         print_warning(f"File {file_name} already exists. Nothing was changed")
     else:
-        with open(file_name, "w", encoding="utf-8") as file:
-            file.write(content)
+        write_linux_file(file_name, content)
     if debug:
         print_debug(f"SMG file {file_name} created in {(time.time() - start_time):.6f} seconds")
 
@@ -419,15 +411,15 @@ def create_dot_file(smg_file: str, dot_file: str = "", force: bool = False, debu
     if debug:
         start_time = time.time()
     if use_global_path:
-        smg_file = os.path.join(GLOBAL_IN_OUT_PATH, smg_file)
+        smg_file = posixpath.join(GLOBAL_IN_OUT_PATH, smg_file)
     if not dot_file:
         dot_file = smg_file.replace(".smg", ".dot")
     if use_global_path:
-        dot_file = os.path.join(GLOBAL_IN_OUT_PATH, dot_file)
-    if not force and os.path.exists(dot_file) and os.path.getsize(dot_file) != 0:
+        dot_file = posixpath.join(GLOBAL_IN_OUT_PATH, dot_file)
+    if not force and path_exists(dot_file) and get_linux_path_size(dot_file) != 0:
         print_warning("DOT file already exists. Nothing was changed")
     else:
-        run_command(["prism", smg_file, "-exporttransdotstates", f"{dot_file}"], use_shell=True, debug=debug)
+        run_command(f"{sh_escape(PRISM_PATH)} {sh_escape(smg_file)} -exporttransdotstates {sh_escape(dot_file)}", use_shell=True, debug=debug)
     if debug:
         print_debug(f"DOT file {dot_file} created in {(time.time() - start_time):.6f} seconds")
 
@@ -436,21 +428,17 @@ def create_png_file(dot_file: str, png_file: str = "", open_png: bool = False, f
     if debug:
         start_time = time.time()
     if use_global_path:
-        dot_file = os.path.join(GLOBAL_IN_OUT_PATH, dot_file)
+        dot_file = posixpath.join(GLOBAL_IN_OUT_PATH, dot_file)
     if not png_file:
         png_file = dot_file.replace(".dot", ".png")
     if use_global_path:
-        png_file = os.path.join(GLOBAL_IN_OUT_PATH, png_file)
-    if not force and os.path.exists(png_file) and os.path.getsize(png_file) != 0:
+        png_file = posixpath.join(GLOBAL_IN_OUT_PATH, png_file)
+    if not force and path_exists(png_file) and get_linux_path_size(png_file) != 0:
         print_warning(f"PNG file {png_file} already exists. Nothing was changed")
     else:
-        run_command(["dot", "-Tpng", dot_file, "-o", png_file], use_shell=True, debug=debug)
+        run_command(f"dot -Tpng  {sh_escape(dot_file)} -o {sh_escape(png_file)}", use_shell=True, debug=debug)
     if open_png:
-        if platform.system() == "Windows":
-            run_command(["start", png_file], use_shell=True, debug=debug)
-        elif platform.system() == "Linux":
-            run_command(["xdg-open", png_file], use_shell=True, debug=debug)
+        run_command(f"xdg-open {sh_escape(png_file)}", use_shell=True, debug=debug)
     if debug:
         print_debug(f"PNG file {png_file} created in {(time.time() - start_time):.6f} seconds")
-
 
