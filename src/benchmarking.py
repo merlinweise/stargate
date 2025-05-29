@@ -1,4 +1,5 @@
 import random
+import os
 import matplotlib
 import posixpath
 import time
@@ -9,11 +10,35 @@ from multiprocessing import Process, Queue
 import queue as pyqueue  # to handle Empty exception
 
 from src.settings import PRISM_PATH
+from src.shell_commands import read_linux_file_lines
 from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability
 from simplestochasticgame import SsgVertex, SsgTransition, SimpleStochasticGame, is_deadlock_vertex
 from error_handling import print_error, print_debug
-from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH
+from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH, GLOBAL_IN_OUT_PATH_WIN
 from shell_commands import run_command, path_exists, get_linux_path_size, remove_file, write_linux_file, sh_escape
+
+
+def make_list_from_string(s: str) -> list[int | float]:
+    """
+    Converts a string representation of a list of integers into an actual list of integers.
+    :param s: String representation of a list of integers
+    :type s: str
+    :return: List of integers
+    """
+    try:
+        new_list = []
+        for x in s.strip("[]").split(","):
+            if x.strip().isdigit():
+                new_list.append(int(x.strip()))
+            else:
+                try:
+                    new_list.append(float(x.strip()))
+                except ValueError:
+                    pass
+        return new_list
+    except Exception as e:
+        print(f"Error converting string to list: {e}")
+        return []
 
 
 def create_random_ssg(number_of_vertices: int, number_of_transitions: int, number_of_target_vertices: int, no_additional_selfloops: bool = False, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
@@ -272,7 +297,7 @@ def print_smg_stats(smg_file: str, debug: bool = GLOBAL_DEBUG, use_global_path: 
     print(output)
 
 
-def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, write: bool = None, result_path: str = None, use_global_path: bool = False, force: bool = True, debug: bool = GLOBAL_DEBUG, print_result: bool = False) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]:
+def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, save_results: bool = None, result_path: str = None, use_global_path: bool = False, force: bool = True, debug: bool = GLOBAL_DEBUG) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]:
     """
     Benchmark the creation and property checking of multiple SSGs.
     :param ssg_count: Number of SSGs to create
@@ -281,8 +306,8 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, writ
     :type ssg_type: str
     :param size_param: Size parameter for the SSG
     :type size_param: int
-    :param write: Whether to write the benchmark results to a file
-    :type write: bool
+    :param save_results: Whether to write the benchmark results to a file
+    :type save_results: bool
     :param result_path: Path to save the benchmark results
     :type result_path: str
     :param use_global_path: Whether to use the global path for the SMG file
@@ -291,24 +316,14 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, writ
     :type force: bool
     :param debug: Whether to print debug information
     :type debug: bool
-    :param print_result: Whether to print the result of the benchmark
-    :type print_result: bool
     :return: Tuple containing the average transformation and property checking times for both versions
     :rtype: tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]
     """
     import time
-    total_v1_trans_time = 0.0
-    total_v2_trans_time = 0.0
-    total_v1_prop_time = 0.0
-    total_v2_prop_time = 0.0
     all_v1_trans_times = []
     all_v2_trans_times = []
     all_v1_prop_times = []
     all_v2_prop_times = []
-    total_v1_vertices = 0
-    total_v2_vertices = 0
-    total_v1_transitions = 0
-    total_v2_transitions = 0
     all_v1_vertices = []
     all_v2_vertices = []
     all_v1_transitions = []
@@ -317,9 +332,8 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, writ
         result_path = f"benchmark_results_normal_{ssg_count}_{ssg_type}_{size_param}.txt"
     if use_global_path:
         result_path = posixpath.join(GLOBAL_IN_OUT_PATH, result_path)
-    if write is None:
-        write = False if not force and path_exists(result_path) and get_linux_path_size(result_path) > 0 else True
-    output = ""
+    if save_results is None:
+        save_results = False if not force and path_exists(result_path) and get_linux_path_size(result_path) > 0 else True
     if debug:
         match ssg_type:
             case "random":
@@ -334,7 +348,6 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, writ
                 print_debug(f"Creating {ssg_count} chain SSGs with {size_param} vertices.")
             case _:
                 print_debug(f"Creating {ssg_count} empty SSGs with {size_param} vertices.")
-    output += "Benchmark-Resultate\n"
     for i in range(ssg_count):
         if debug:
             print_debug(f"{i}/{ssg_count} SSGs created and evaluated.")
@@ -389,40 +402,24 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, writ
         all_v1_transitions.append(trans_v1)
         all_v2_transitions.append(trans_v2)
 
-        total_v1_trans_time += trans_v1_time
-        total_v2_trans_time += trans_v2_time
-        total_v1_prop_time += prop_v1_time
-        total_v2_prop_time += prop_v2_time
-        total_v1_vertices += vert_v1
-        total_v2_vertices += vert_v2
-        total_v1_transitions += trans_v1
-        total_v2_transitions += trans_v2
-
     if debug:
         print_debug(f"{ssg_count}/{ssg_count} SSGs created and evaluated.")
-    avg_v1_trans = total_v1_trans_time / ssg_count
-    avg_v2_trans = total_v2_trans_time / ssg_count
-    avg_v1_prop = total_v1_prop_time / ssg_count
-    avg_v2_prop = total_v2_prop_time / ssg_count
-
-    if (avg_v1_trans + avg_v1_prop) < (avg_v2_trans + avg_v2_prop):
-        output += f"Version1 is faster.\n\tTransformation Delta: {avg_v1_trans-avg_v2_trans:.4f}\n\tProperty Delta: {avg_v1_prop-avg_v2_prop:.4f}\n"
-        if print_result:
-            print(f"Version1 is faster.\n\tTransformation Delta: {avg_v1_trans-avg_v2_trans:.4f}\n\tProperty Delta: {avg_v1_prop-avg_v2_prop:.4f}\n")
-        if write:
-            write_linux_file(result_path, output)
-
-    else:
-        output += f"Version2 is faster.\n\tTransformation Delta: {avg_v2_trans-avg_v1_trans:.4f}\n\tProperty Delta: {avg_v2_prop-avg_v1_prop:.4f}\n"
-        if print_result:
-            print(f"Version2 is faster.\n\tTransformation Delta: {avg_v2_trans-avg_v1_trans:.4f}\n\tProperty Delta: {avg_v2_prop-avg_v1_prop:.4f}\n")
-        if write:
-            write_linux_file(result_path, output)
+    if save_results:
+        output = str(all_v1_trans_times) + "\n"
+        output += str(all_v2_trans_times) + "\n"
+        output += str(all_v1_prop_times) + "\n"
+        output += str(all_v2_prop_times) + "\n"
+        output += str(all_v1_vertices) + "\n"
+        output += str(all_v2_vertices) + "\n"
+        output += str(all_v1_transitions) + "\n"
+        output += str(all_v2_transitions) + "\n"
+        output += f"[norm, {ssg_type}, {ssg_count}, {size_param}]" + "\n"
+        write_linux_file(result_path, output)
 
     return all_v1_trans_times, all_v2_trans_times, all_v1_prop_times, all_v2_prop_times, all_v1_vertices, all_v2_vertices, all_v1_transitions, all_v2_transitions, ("norm", ssg_type, ssg_count, size_param)
 
 
-def _iteration_worker(q, ssg_type, i, debug, use_global_path):
+def _iteration_worker(q, ssg_type, i, use_global_path):
     """
     Worker function to run a single benchmark iteration and return results via Queue.
     :param q: Queue to put the results into
@@ -431,19 +428,17 @@ def _iteration_worker(q, ssg_type, i, debug, use_global_path):
     :type ssg_type: str
     :param i: Index of the SSG to create
     :type i: int
-    :param debug: Whether to print debug information
-    :type debug: bool
     :param use_global_path: Whether to use the global path for the SMG file
     :type use_global_path: bool
     """
     try:
-        result = single_iteration_for_exponential_benchmark(ssg_type, i, debug, use_global_path)
+        result = single_iteration_for_exponential_benchmark(ssg_type, i, use_global_path)
         q.put(result)
     except Exception as e:
         q.put(e)
 
 
-def single_iteration_for_exponential_benchmark(ssg_type: str, i: int, debug: bool = GLOBAL_DEBUG, use_global_path: bool = True) -> tuple[float, float, float, float, int, int, int, int, str, str, int]:
+def single_iteration_for_exponential_benchmark(ssg_type: str, i: int, use_global_path: bool = True) -> tuple[float, float, float, float, int, int, int, int, str, str, int]:
 
     if ssg_type == "binary":
         size_param = i + 2
@@ -493,15 +488,15 @@ def single_iteration_for_exponential_benchmark(ssg_type: str, i: int, debug: boo
     return trans_v1_time, trans_v2_time, prop_v1_time, prop_v2_time, vert_v1, vert_v2, trans_v1, trans_v2, smg_v1_path, smg_v2_path, size_param
 
 
-def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, write: bool = None, result_path: str = None, use_global_path: bool = True, force: bool = True, debug: bool = GLOBAL_DEBUG, print_result: bool = False) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]:
+def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, save_results: bool = None, result_path: str = None, use_global_path: bool = True, force: bool = True, debug: bool = GLOBAL_DEBUG) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]:
     """
         Benchmark the creation and property checking of multiple SSGs.
         :param ssg_type: Type of SSG to create (random, binary, empty)
         :type ssg_type: str
         :param time_per_iteration: Time in seconds for each iteration
         :type time_per_iteration: int
-        :param write: Whether to write the benchmark results to a file
-        :type write: bool
+        :param save_results: Whether to write the benchmark results to a file
+        :type save_results: bool
         :param result_path: Path to save the benchmark results
         :type result_path: str
         :param use_global_path: Whether to use the global path for the SMG file
@@ -510,24 +505,14 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, wri
         :type force: bool
         :param debug: Whether to print debug information
         :type debug: bool
-        :param print_result: Whether to print the result of the benchmark
-        :type print_result: bool
         :return: Tuple containing the average transformation and property checking times for both versions
         :rtype: tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]
         """
 
-    total_v1_trans_time = 0.0
-    total_v2_trans_time = 0.0
-    total_v1_prop_time = 0.0
-    total_v2_prop_time = 0.0
     all_v1_trans_times = []
     all_v2_trans_times = []
     all_v1_prop_times = []
     all_v2_prop_times = []
-    total_v1_vertices = 0
-    total_v2_vertices = 0
-    total_v1_transitions = 0
-    total_v2_transitions = 0
     all_v1_vertices = []
     all_v2_vertices = []
     all_v1_transitions = []
@@ -536,9 +521,8 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, wri
         result_path = f"benchmark_results_exponential_{ssg_type}_max_{time_per_iteration}.txt"
     if use_global_path:
         result_path = posixpath.join(GLOBAL_IN_OUT_PATH, result_path)
-    if write is None:
-        write = False if not force and path_exists(result_path) and get_linux_path_size(result_path) > 0 else True
-    output = ""
+    if save_results is None:
+        save_results = False if not force and path_exists(result_path) and get_linux_path_size(result_path) > 0 else True
     if debug:
         match ssg_type:
             case "random":
@@ -557,7 +541,6 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, wri
                 print_debug(f"Creating chain SSGs that grow exponentially until timeout of {time_per_iteration} seconds.")
             case _:
                 print_debug(f"Creating empty SSGs that grow exponentially until timeout of {time_per_iteration} seconds.")
-    output += "Benchmark-Resultate\n"
     i = 0
     while True:
         q = Queue()
@@ -618,41 +601,42 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, wri
         all_v1_transitions.append(trans_v1)
         all_v2_transitions.append(trans_v2)
 
-        total_v1_trans_time += trans_v1_time
-        total_v2_trans_time += trans_v2_time
-        total_v1_prop_time += prop_v1_time
-        total_v2_prop_time += prop_v2_time
-        total_v1_vertices += vert_v1
-        total_v2_vertices += vert_v2
-        total_v1_transitions += trans_v1
-        total_v2_transitions += trans_v2
-
         i += 1
 
-    avg_v1_trans = total_v1_trans_time / max(len(all_v1_trans_times), 1)
-    avg_v2_trans = total_v2_trans_time / max(len(all_v2_trans_times), 1)
-    avg_v1_prop = total_v1_prop_time / max(len(all_v1_prop_times), 1)
-    avg_v2_prop = total_v2_prop_time / max(len(all_v2_prop_times), 1)
-
-    if (avg_v1_trans + avg_v1_prop) < (avg_v2_trans + avg_v2_prop):
-        output += f"Version1 is faster.\n\tTransformation Delta: {avg_v1_trans - avg_v2_trans:.4f}\n\tProperty Delta: {avg_v1_prop - avg_v2_prop:.4f}\n"
-        if print_result:
-            print(
-                f"Version1 is faster.\n\tTransformation Delta: {avg_v1_trans - avg_v2_trans:.4f}\n\tProperty Delta: {avg_v1_prop - avg_v2_prop:.4f}\n")
-        if write:
-            write_linux_file(result_path, output)
-    else:
-        output += f"Version2 is faster.\n\tTransformation Delta: {avg_v2_trans - avg_v1_trans:.4f}\n\tProperty Delta: {avg_v2_prop - avg_v1_prop:.4f}\n"
-        if print_result:
-            print(
-                f"Version2 is faster.\n\tTransformation Delta: {avg_v2_trans - avg_v1_trans:.4f}\n\tProperty Delta: {avg_v2_prop - avg_v1_prop:.4f}\n")
-        if write:
-            write_linux_file(result_path, output)
+    if save_results:
+        output = str(all_v1_trans_times) + "\n"
+        output += str(all_v2_trans_times) + "\n"
+        output += str(all_v1_prop_times) + "\n"
+        output += str(all_v2_prop_times) + "\n"
+        output += str(all_v1_vertices) + "\n"
+        output += str(all_v2_vertices) + "\n"
+        output += str(all_v1_transitions) + "\n"
+        output += str(all_v2_transitions) + "\n"
+        output += f"[ex, {ssg_type}, {size_param}, {time_per_iteration}]" + "\n"
+        write_linux_file(result_path, output)
 
     return all_v1_trans_times, all_v2_trans_times, all_v1_prop_times, all_v2_prop_times, all_v1_vertices, all_v2_vertices, all_v1_transitions, all_v2_transitions, ("ex", ssg_type, size_param, time_per_iteration)
 
 
-def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: list[float], all_v1_prop_times: list[float], all_v2_prop_times: list[float], all_v1_vertices: list[int], all_v2_vertices: list[int], all_v1_transitions: list[int], all_v2_transitions: list[int], benchmark_info: tuple[str, str, int, int], show_times: bool = True, show_stats: bool = True, plot_name: str = None, save_plots: bool = False, use_global_path: bool = True, debug: bool = GLOBAL_DEBUG) -> None:
+def read_benchmark_results(file_path: str, use_global_path: bool = True) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int]]:
+    """
+    Read benchmark results from a file.
+    :param file_path: Path to the benchmark results file
+    :type file_path: str
+    :param use_global_path: Whether to use the global path for the file
+    :type use_global_path: bool
+    :return: Tuple containing the benchmark results
+    :rtype: tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int]]
+    """
+    if use_global_path:
+        file_path = posixpath.join(GLOBAL_IN_OUT_PATH, file_path)
+    content = read_linux_file_lines(file_path)
+    if len(content) < 8:
+        raise ValueError(f"File {file_path} does not contain enough data. Expected 8 lines, got {len(content)}.")
+    return make_list_from_string(content[0].replace("\n", "")), make_list_from_string(content[1].replace("\n", "")), make_list_from_string(content[2].replace("\n", "")), make_list_from_string(content[3].replace("\n", "")), make_list_from_string(content[4].replace("\n", "")), make_list_from_string(content[5].replace("\n", "")), make_list_from_string(content[6].replace("\n", "")), make_list_from_string(content[7].replace("\n", ""))
+
+
+def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: list[float], all_v1_prop_times: list[float], all_v2_prop_times: list[float], all_v1_vertices: list[int], all_v2_vertices: list[int], all_v1_transitions: list[int], all_v2_transitions: list[int], benchmark_info: tuple[str, str, int, int], show_times: bool = True, show_stats: bool = True, plot_name: str = None, save_plots: bool = False, use_global_path: bool = True) -> None:
     """
     Plot the benchmark results
     :param all_v1_trans_times: List of all transformation times for version 1
@@ -683,8 +667,6 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
     :type save_plots: bool
     :param use_global_path: Whether to use the global path for the plot file
     :type use_global_path: bool
-    :param debug: Whether to print debug information
-    :type debug: bool
     """
     with contextlib.redirect_stdout(io.StringIO()):
         matplotlib.use("TkAgg")
@@ -712,6 +694,10 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
     std_v1_v = np.std(x3)
     mean_v2_v = np.mean(y3)
     std_v2_v = np.std(y3)
+    mean_v1_t = np.mean(x4)
+    std_v1_t = np.std(x4)
+    mean_v2_t = np.mean(y4)
+    std_v2_t = np.std(y4)
 
     mask_above1 = y1 > x1
     mask_below1 = ~mask_above1
@@ -750,16 +736,17 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
         else:
             raise ValueError(f"Unknown benchmark type: {benchmark_info[0]}. Expected \'norm\' or \'ex\'.")
 
-
     fig, axs = plt.subplots(1, 2, figsize=(12, 6), num=plot_name + "_time_comparison")
     fig.suptitle("Benchmark Transformation vs. Property Checking Time")
 
     # --- Plot 1: Transformation Time ---
     axs[0].set_xscale('log')
     axs[0].set_yscale('log')
-    axs[0].scatter(x1[mask_below1], y1[mask_below1], color='blue', label='v2 faster than v1')
     axs[0].scatter(x1[mask_above1], y1[mask_above1], color='red', label='v1 faster than v2')
-    axs[0].plot(x1, x1, linestyle='-', color='gray', label='v1 and v2 equal')
+    axs[0].scatter(x1[mask_below1], y1[mask_below1], color='blue', label='v2 faster than v1')
+    axs[0].plot(x1, x1, linestyle='-', color='black', label='v1 and v2 equal', )
+    axs[0].plot(x1, 2 * x1, linestyle='--', color='#808080')
+    axs[0].plot(x1, 0.5 * x1, linestyle='--', color='#808080')
     axs[0].set_xlabel("v1 Transformation Time [s]")
     axs[0].set_ylabel("v2 Transformation Time [s]")
     axs[0].grid(True, which='major', ls='--')
@@ -769,16 +756,18 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
     # --- Plot 2: Property Checking Time ---
     axs[1].set_xscale('log')
     axs[1].set_yscale('log')
-    axs[1].scatter(x2[mask_below2], y2[mask_below2], color='blue', label='v2 faster than v1')
     axs[1].scatter(x2[mask_above2], y2[mask_above2], color='red', label='v1 faster than v2')
-    axs[1].plot(x2, x2, linestyle='-', color='gray', label='v1 and v2 equal')
+    axs[1].scatter(x2[mask_below2], y2[mask_below2], color='blue', label='v2 faster than v1')
+    axs[1].plot(x2, x2, linestyle='-', color='black', label='v1 and v2 equal')
+    axs[1].plot(x2, 2 * x2, linestyle='--', color='#808080')
+    axs[1].plot(x2, 0.5 * x2, linestyle='--', color='#808080')
     axs[1].set_xlabel("v1 Property Checking Time [s]")
     axs[1].set_ylabel("v2 Property Checking Time [s]")
     axs[1].grid(True, which='major', ls='--')
     axs[1].legend()
     axs[1].set_title(f"Property Check | v1 better in {better_v1_pc_count / len(x2) * 100:.2f}%")
 
-    # --- Gemeinsame Statistik-Info ---
+    # --- Statistic Info ---
     fig.text(0.5, 0.01,
              f"v1 TT: μ={mean_v1_tt:.5f}, σ={std_v1_tt:.5f} | "
              f"v2 TT: μ={mean_v2_tt:.5f}, σ={std_v2_tt:.5f} || "
@@ -803,9 +792,11 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
     # Plot: Vertices
     axs[0].set_xscale('log')
     axs[0].set_yscale('log')
-    axs[0].scatter(x3[mask_below3], y3[mask_below3], color='blue', label='#v with v2 < #v with v1')
     axs[0].scatter(x3[mask_above3], y3[mask_above3], color='red', label='#v with v1 < #v with v2')
-    axs[0].plot(x3, x3, linestyle='-', color='gray', label='#v with v1 = #v with v2')
+    axs[0].scatter(x3[mask_below3], y3[mask_below3], color='blue', label='#v with v2 < #v with v1')
+    axs[0].plot(x3, x3, linestyle='-', color='black', label='#v with v1 = #v with v2')
+    axs[0].plot(x3, 2 * x3, linestyle='--', color='#808080')
+    axs[0].plot(x3, 0.5 * x3, linestyle='--', color='#808080')
     axs[0].set_xlabel("v1 Vertices")
     axs[0].set_ylabel("v2 Vertices")
     axs[0].set_title(f"Vertices | v1 less vertices than v2 in {better_v1_v_count / len(x3) * 100:.2f}% of the cases")
@@ -815,18 +806,23 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
     # Plot: Transitions
     axs[1].set_xscale('log')
     axs[1].set_yscale('log')
-    axs[1].scatter(x4[mask_below4], y4[mask_below4], color='blue', label='#t with v2 < #t with v1')
     axs[1].scatter(x4[mask_above4], y4[mask_above4], color='red', label='#t with v1 < #t with v2')
-    axs[1].plot(x4, x4, linestyle='-', color='gray', label='#t with v1 = #t with v2')
+    axs[1].scatter(x4[mask_below4], y4[mask_below4], color='blue', label='#t with v2 < #t with v1')
+    axs[1].plot(x4, x4, linestyle='-', color='black', label='#t with v1 = #t with v2')
+    axs[1].plot(x4, 2 * x4, linestyle='--', color='#808080')
+    axs[1].plot(x4, 0.5 * x4, linestyle='--', color='#808080')
     axs[1].set_xlabel("v1 Transitions")
     axs[1].set_ylabel("v2 Transitions")
     axs[1].set_title(f"Transitions | v1 less transitions than v2 in {better_v1_t_count / len(x4) * 100:.2f}% of the cases")
     axs[1].legend()
     axs[1].grid(True, which='major', ls='--')
 
+    # --- Statistic Info ---
     fig_stat.text(0.5, 0.01,
                   f"v1 Vertices: μ={mean_v1_v:.2f}, σ={std_v1_v:.2f} | "
-                  f"v2 Vertices: μ={mean_v2_v:.2f}, σ={std_v2_v:.2f}",
+                  f"v2 Vertices: μ={mean_v2_v:.2f}, σ={std_v2_v:.2f} || "
+                  f"v1 Transitions: μ={mean_v1_t:.2f}, σ={std_v1_t:.2f} | "
+                  f"v2 Transitions: μ={mean_v2_t:.2f}, σ={std_v2_t:.2f}",
                   ha='center', fontsize=9)
 
     fig_stat.tight_layout(rect=(0, 0.05, 1, 0.95))
@@ -836,6 +832,243 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
         if use_global_path:
             filename = posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", "exponential", filename)
         fig_stat.savefig(filename)
+
+    if not show_stats:
+        plt.close(fig_stat)
+
+    if show_times or show_stats:
+        plt.show()
+
+
+def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]], show_times: bool = True, show_stats: bool = True, plot_name: str = None, save_plots: bool = False, use_global_path: bool = True) -> None:
+    """
+    Plot combined benchmark results.
+    :param benchmarks_results: The benchmark results to plot, each as a tuple containing transformation times, property checking times, vertices counts, transitions counts, and benchmark info.
+    :type benchmarks_results: list[tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]]
+    :param show_times:
+    :param show_stats:
+    :param plot_name:
+    :param save_plots:
+    :param use_global_path:
+    :return:
+    """
+    with contextlib.redirect_stdout(io.StringIO()):
+        matplotlib.use("TkAgg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    data = []
+    for benchmark_index in range(len(benchmarks_results)):
+        data_i = []
+        for i in range(8):
+            data_i.append(np.array(benchmarks_results[benchmark_index][i]))
+        data.append((data_i, benchmarks_results[benchmark_index][8][1]))
+
+    all_v1_tt = data[0][0][1]
+    all_v2_tt = data[0][0][1]
+    all_v1_pt = data[0][0][2]
+    all_v2_pt = data[0][0][3]
+    all_v1_v = data[0][0][4]
+    all_v2_v = data[0][0][5]
+    all_v1_t = data[0][0][6]
+    all_v2_t = data[0][0][7]
+    for i in range(1, len(data)):
+        all_v1_tt = np.concatenate((all_v1_tt, data[i][0][0]))
+        all_v2_tt = np.concatenate((all_v2_tt, data[i][0][1]))
+        all_v1_pt = np.concatenate((all_v1_pt, data[i][0][2]))
+        all_v2_pt = np.concatenate((all_v2_pt, data[i][0][3]))
+        all_v1_v = np.concatenate((all_v1_v, data[i][0][4]))
+        all_v2_v = np.concatenate((all_v2_v, data[i][0][5]))
+        all_v1_t = np.concatenate((all_v1_t, data[i][0][6]))
+        all_v2_t = np.concatenate((all_v2_t, data[i][0][7]))
+
+    ssg_type = []
+    for benchmark_index in range(len(benchmarks_results)):
+        for i in range(len(benchmarks_results[benchmark_index][0])):
+            ssg_type.append(benchmarks_results[benchmark_index][8][1])
+    ssg_type_array = np.array(ssg_type)
+
+    colors = {"random": 'red', "random_no_additional_selfloops": 'orange', "binary": 'green', "complete": 'blue', "chain": 'purple', "empty": 'gray'}
+    col = np.array([colors[ssg_type] for ssg_type in ssg_type_array])
+    labels = {"random": 'Random', "random_no_additional_selfloops": 'Random (No Additional Self-Loops)', "binary": 'Binary Tree', "complete": 'Complete Graph', "chain": 'Chain', "empty": 'Empty'}
+    lab = np.array([labels[ssg_type] for ssg_type in ssg_type_array])
+
+    mean_v1_tt = np.mean(all_v1_tt)
+    std_v1_tt = np.std(all_v1_tt)
+    mean_v2_tt = np.mean(all_v2_tt)
+    std_v2_tt = np.std(all_v2_tt)
+    mean_v1_pt = np.mean(all_v1_pt)
+    std_v1_pt = np.std(all_v1_pt)
+    mean_v2_pt = np.mean(all_v2_pt)
+    std_v2_pt = np.std(all_v2_pt)
+    mean_v1_v = np.mean(all_v1_v)
+    std_v1_v = np.std(all_v1_v)
+    mean_v2_v = np.mean(all_v2_v)
+    std_v2_v = np.std(all_v2_v)
+    mean_v1_t = np.mean(all_v1_t)
+    std_v1_t = np.std(all_v1_t)
+    mean_v2_t = np.mean(all_v2_t)
+    std_v2_t = np.std(all_v2_t)
+
+    better_v1_tt_count = 0
+    for i in range(len(all_v1_tt)):
+        if all_v1_tt[i] < all_v2_tt[i]:
+            better_v1_tt_count += 1
+    better_v1_pc_count = 0
+    for i in range(len(all_v1_pt)):
+        if all_v1_pt[i] < all_v2_pt[i]:
+            better_v1_pc_count += 1
+    better_v1_v_count = 0
+    for i in range(len(all_v1_v)):
+        if all_v1_v[i] < all_v2_v[i]:
+            better_v1_v_count += 1
+    better_v1_t_count = 0
+    for i in range(len(all_v1_t)):
+        if all_v1_t[i] < all_v2_t[i]:
+            better_v1_t_count += 1
+
+    if plot_name is None:
+        has_normal_bechmarks = False
+        has_exponential_benchmarks = False
+        for benchmark_index in range(len(benchmarks_results)):
+            if benchmarks_results[benchmark_index][8][0] == "norm":
+                has_normal_bechmarks = True
+            elif benchmarks_results[benchmark_index][8][0] == "ex":
+                has_exponential_benchmarks = True
+            else:
+                raise ValueError(f"Unknown benchmark type: {benchmarks_results[benchmark_index][8][0]}. Expected \'norm\' or \'ex\'.")
+        if has_normal_bechmarks and has_exponential_benchmarks:
+            plot_name = f"benchmark_results_combined_{len(benchmarks_results)}"
+        elif has_normal_bechmarks and not has_exponential_benchmarks:
+            plot_name = f"benchmark_results_normal_{len(benchmarks_results)}"
+        elif not has_normal_bechmarks and has_exponential_benchmarks:
+            plot_name = f"benchmark_results_exponential_{len(benchmarks_results)}"
+        else:
+            raise ValueError("No benchmarks results provided to plot.")
+
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6), num=plot_name + "_time_comparison")
+    fig.suptitle("Combined Benchmark Transformation vs. Property Checking Time")
+
+    # --- Plot 1: Transformation Time ---
+    axs[0].set_xscale('log')
+    axs[0].set_yscale('log')
+    for ssg_type in np.unique(ssg_type_array):
+        mask = ssg_type_array == ssg_type
+        axs[0].scatter(all_v1_tt[mask], all_v2_tt[mask], color=colors[ssg_type], label=labels[ssg_type])
+    axs[0].plot(all_v1_tt, all_v1_tt, linestyle='-', color='black', label='v1 and v2 equal')
+    axs[0].plot(all_v1_tt, 2 * all_v1_tt, linestyle='--', color='#808080')
+    axs[0].plot(all_v1_tt, 0.5 * all_v1_tt, linestyle='--', color='#808080')
+    axs[0].set_xlabel("v1 Transformation Time [s]")
+    axs[0].set_ylabel("v2 Transformation Time [s]")
+    axs[0].grid(True, which='major', ls='--')
+    axs[0].legend()
+    axs[0].set_title(f"Transformation | v1 better in {better_v1_tt_count / len(all_v1_tt) * 100:.2f}%")
+
+    # --- Plot 2: Property Checking Time ---
+    axs[1].set_xscale('log')
+    axs[1].set_yscale('log')
+    for ssg_type in np.unique(ssg_type_array):
+        mask = ssg_type_array == ssg_type
+        axs[1].scatter(all_v1_pt[mask], all_v2_pt[mask], color=colors[ssg_type], label=labels[ssg_type])
+    axs[1].plot(all_v1_pt, all_v1_pt, linestyle='-', color='black', label='v1 and v2 equal')
+    axs[1].plot(all_v1_pt, 2 * all_v1_pt, linestyle='--', color='#808080')
+    axs[1].plot(all_v1_pt, 0.5 * all_v1_pt, linestyle='--', color='#808080')
+    axs[1].set_xlabel("v1 Property Checking Time [s]")
+    axs[1].set_ylabel("v2 Property Checking Time [s]")
+    axs[1].grid(True, which='major', ls='--')
+    axs[1].legend()
+    axs[1].set_title(f"Property Check | v1 better in {better_v1_pc_count / len(all_v1_pt) * 100:.2f}%")
+
+    # --- Statistic Info ---
+    fig.text(0.5, 0.01, f"v1 TT: μ={mean_v1_tt:.5f}, σ={std_v1_tt:.5f} | v2 TT: μ={mean_v2_tt:.5f}, σ={std_v2_tt:.5f} || v1 PT: μ={mean_v1_pt:.5f}, σ={std_v1_pt:.5f} | v2 PT: μ={mean_v2_pt:.5f}, σ={std_v2_pt:.5f}", ha='center', fontsize=9)
+
+    fig.tight_layout(rect=(0, 0.05, 1, 0.95))
+
+    if save_plots:
+        filename = f"{plot_name}_times_combined"
+        if use_global_path:
+            if os.name == 'nt':
+                if os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", filename + ".png")):
+                    i = 1
+                    while os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", f"{filename}_{i} + .png")):
+                        i += 1
+                    filename = os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", f"{filename}_{i}")
+                else:
+                    filename = os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", filename)
+            elif os.name == 'posix':
+                if os.path.exists(posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename + ".png")):
+                    i = 1
+                    while os.path.exists(posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i} + .png")):
+                        i += 1
+                    filename = posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i}")
+                else:
+                    filename = posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename)
+            else:
+                raise ValueError(f"Unknown OS: {os.name}. Expected 'nt' or 'posix'.")
+        fig.savefig(filename + ".png")
+
+    if not show_times:
+        plt.close(fig)
+
+    fig_stat, axs = plt.subplots(1, 2, figsize=(12, 6), num=plot_name + "_stats_comparison")
+    fig_stat.suptitle("Combined Benchmark Graph Statistics (Vertices vs. Transitions)")
+    # Plot: Vertices
+
+    axs[0].set_xscale('log')
+    axs[0].set_yscale('log')
+    for ssg_type in np.unique(ssg_type_array):
+        mask = ssg_type_array == ssg_type
+        axs[0].scatter(all_v1_v[mask], all_v2_v[mask], color=colors[ssg_type], label=labels[ssg_type])
+    axs[0].plot(all_v1_v, all_v1_v, linestyle='-', color='black', label='#v with v1 = #v with v2')
+    axs[0].plot(all_v1_v, 2 * all_v1_v, linestyle='--', color='#808080')
+    axs[0].plot(all_v1_v, 0.5 * all_v1_v, linestyle='--', color='#808080')
+    axs[0].set_xlabel("v1 Vertices")
+    axs[0].set_ylabel("v2 Vertices")
+    axs[0].set_title(f"Vertices | v1 less vertices than v2 in {better_v1_v_count / len(all_v1_v) * 100:.2f}% of the cases")
+    axs[0].legend()
+    axs[0].grid(True, which='major', ls='--')
+
+    # Plot: Transitions
+    axs[1].set_xscale('log')
+    axs[1].set_yscale('log')
+    for ssg_type in np.unique(ssg_type_array):
+        mask = ssg_type_array == ssg_type
+        axs[1].scatter(all_v1_t[mask], all_v2_t[mask], color=colors[ssg_type], label=labels[ssg_type])
+    axs[1].plot(all_v1_t, all_v1_t, linestyle='-', color='black', label='#t with v1 = #t with v2')
+    axs[1].plot(all_v1_t, 2 * all_v1_t, linestyle='--', color='#808080')
+    axs[1].plot(all_v1_t, 0.5 * all_v1_t, linestyle='--', color='#808080')
+    axs[1].set_xlabel("v1 Transitions")
+    axs[1].set_ylabel("v2 Transitions")
+    axs[1].set_title(f"Transitions | v1 less transitions than v2 in {better_v1_t_count / len(all_v1_t) * 100:.2f}% of the cases")
+    axs[1].legend()
+    axs[1].grid(True, which='major', ls='--')
+
+    # --- Statistic Info ---
+    fig_stat.text(0.5, 0.01, f"v1 Vertices: μ={mean_v1_v:.2f}, σ={std_v1_v:.2f} | v2 Vertices: μ={mean_v2_v:.2f}, σ={std_v2_v:.2f} || v1 Transitions: μ={mean_v1_t:.2f}, σ={std_v1_t:.2f} | v2 Transitions: μ={mean_v2_t:.2f}, σ={std_v2_t:.2f}", ha='center', fontsize=9)
+
+    fig_stat.tight_layout(rect=(0, 0.05, 1, 0.95))
+    if save_plots:
+        filename = f"{plot_name}_stats_combined"
+        if use_global_path:
+            if os.name == 'nt':
+                if os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", filename + ".png")):
+                    i = 1
+                    while os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", f"{filename}_{i} + .png")):
+                        i += 1
+                    filename = os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", f"{filename}_{i}")
+                else:
+                    filename = os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", filename)
+            elif os.name == 'posix':
+                if os.path.exists(posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename + ".png")):
+                    i = 1
+                    while os.path.exists(posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i} + .png")):
+                        i += 1
+                    filename = posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i}")
+                else:
+                    filename = posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename)
+            else:
+                raise (ValueError(f"Unknown OS: {os.name}. Expected 'nt' or 'posix'."))
+        fig_stat.savefig(filename + ".png")
 
     if not show_stats:
         plt.close(fig_stat)
@@ -854,8 +1087,7 @@ def main():
         use_global_path=True,
         debug=True,
         force=True,
-        print_result=False,
-        write=False
+        save_results=False
     )
     plot_benchmark_results(
         p1, p2, p3, p4, p5, p6, p7, p8,
@@ -871,8 +1103,7 @@ def main():
         use_global_path=True,
         debug=True,
         force=True,
-        print_result=False,
-        write=False
+        save_results=False
     )
     plot_benchmark_results(
         p1, p2, p3, p4, p5, p6, p7, p8,
@@ -888,8 +1119,7 @@ def main():
         use_global_path=True,
         debug=True,
         force=True,
-        print_result=False,
-        write=False
+        save_results=False
     )
     plot_benchmark_results(
         p1, p2, p3, p4, p5, p6, p7, p8,
@@ -905,8 +1135,7 @@ def main():
         use_global_path=True,
         debug=True,
         force=True,
-        print_result=False,
-        write=False
+        save_results=False
     )
     plot_benchmark_results(
         p1, p2, p3, p4, p5, p6, p7, p8,
@@ -922,8 +1151,7 @@ def main():
         use_global_path=True,
         debug=True,
         force=True,
-        print_result=False,
-        write=False
+        save_results=False
     )
     plot_benchmark_results(
         p1, p2, p3, p4, p5, p6, p7, p8,
@@ -939,8 +1167,7 @@ def main():
         use_global_path=True,
         debug=True,
         force=True,
-        print_result=False,
-        write=False
+        save_results=False
     )
     plot_benchmark_results(
         p1, p2, p3, p4, p5, p6, p7, p8,
@@ -952,7 +1179,13 @@ def main():
     )
 
 
-if __name__ == '__main__':
+"""if __name__ == '__main__':
     import multiprocessing
     multiprocessing.freeze_support()  # Optional, hilft bei frozen executables
-    main()
+    main()"""
+
+# read_benchmark_results("benchmarks/test_benchmark_file.txt", use_global_path=True)
+
+# plot_benchmark_results([1, 10, 100, 1000], [1, 20, 50, 1500], [1, 10, 100, 1000], [1, 20, 50, 1500], [1, 10, 100, 1000], [1, 20, 50, 1500], [1, 10, 100, 1000], [1, 20, 50, 1500], ("ex", "random", -1, -1), True, True, "test_plot", False, use_global_path=True)
+
+plot_combined_benchmark_results([([1.0], [0.5], [0.5], [1.0], [10], [20], [20], [10], ("ex", "random", 1, 1)), ([1.0, 5.0], [2.0, 10.0], [10.0, 50.0], [20.0, 100.0], [10.0, 20.0], [20.0, 40.0], [100.0, 200.0], [200.0, 400.0], ("normal", "empty", 1, 1))], show_times=False, show_stats=False, plot_name="test_combined_plot", save_plots=True, use_global_path=True)

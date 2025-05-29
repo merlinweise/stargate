@@ -2,6 +2,7 @@ import os
 import subprocess
 
 GLOBAL_IN_OUT_PATH = "/mnt/c/Uni_Zeug/6.Semester/Bachelorarbeit/PRISMgames_testing/program_in_and_out"  # needs to be in Linux format
+GLOBAL_IN_OUT_PATH_WIN = "C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\PRISMgames_testing\\program_in_and_out"  # needs to be in Windows format
 GLOBAL_DEBUG = False
 PRINT_VERTEX_CREATION_WARNINGS = False
 ENSURE_EVE_AND_ADAM_VERTICES = True

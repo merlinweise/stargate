@@ -134,6 +134,6 @@ def run_command(command, use_shell=False, debug=GLOBAL_DEBUG):
         return result
 
     except subprocess.CalledProcessError as e:
-        print_error(f"Command {' '.join(command)} failed with error: {e.stderr}")
+        print_error(f"Command {command} failed with error: {e.stderr}")
         return None
 
