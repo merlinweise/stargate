@@ -1,16 +1,18 @@
 import copy
+import os.path
 import time
 import re
 import posixpath
+
 from simplestochasticgame import SimpleStochasticGame, SsgTransition, SsgVertex
-from shell_commands import run_command, path_exists, get_linux_path_size, write_linux_file, sh_escape
+from shell_commands import run_command, sh_escape, run_command_linux
 from error_handling import print_warning, print_debug
-from settings import *
+from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_LINUX, PRISM_PATH, MAX_ITERS, PRISM_EPSILON, PRISM_SOLVING_ALGORITHM, GLOBAL_IN_OUT_PATH, IS_OS_LINUX, GLOBAL_IN_OUT_PATH_WINDOWS
 
 
 def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: bool = GLOBAL_DEBUG, print_correspondingvertices: bool = False) -> str:
     if debug:
-        start_time = time.time()
+        start_time = time.perf_counter()
     content = "smg\n\n"
     if version1:
         ssg = copy.deepcopy(ssg)
@@ -263,7 +265,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: boo
     else:
         content = content[:-3] + ");"
     if debug:
-        print_debug(f"SMG specification created in {(time.time() - start_time):.6f} seconds with version {1 if version1 else 2}")
+        print_debug(f"SMG specification created in {(time.perf_counter() - start_time):.6f} seconds with version {1 if version1 else 2}")
     return content
 
 
@@ -341,44 +343,45 @@ def sanity_check_alternating_vertices(ssg: SimpleStochasticGame) -> bool:
     return True
 
 
-def check_property(smg_file, property_string, debug: bool = GLOBAL_DEBUG) -> float:
+def check_property(smg_file, property_string, use_global_path: bool = False, debug: bool = GLOBAL_DEBUG) -> float:
     if debug:
-        start_time = time.time()
-    smg_file = posixpath.join(GLOBAL_IN_OUT_PATH, smg_file)
-    command = f"{sh_escape(PRISM_PATH)} {sh_escape(smg_file)} -pf {sh_escape(property_string)} -maxiters 1000000000 -epsilon {str(PRISM_EPSILON)} {sh_escape(PRISM_SOLVING_ALGORITHM)}"
-    result = run_command(command, use_shell=True)
+        start_time = time.perf_counter()
+    if use_global_path:
+        smg_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, smg_file)
+    command = f"{sh_escape(PRISM_PATH)} {sh_escape(smg_file)} -pf {sh_escape(property_string)} -maxiters {str(MAX_ITERS)} -epsilon {str(PRISM_EPSILON)} {sh_escape(PRISM_SOLVING_ALGORITHM)}"
+    result = run_command_linux(command=command, use_shell=True, debug=debug)
     output = result.stdout
     match = re.search(r'Result:\s*(\d\.\d+(E-\d+)?)', output)
     if match:
         probability = float(match.group(1))
         if debug:
-            print_debug(f"Property {property_string} checked in {(time.time() - start_time):.6f} seconds")
+            print_debug(f"Property {property_string} checked in {(time.perf_counter() - start_time):.6f} seconds")
         return probability
     else:
         if debug:
-            print_debug(f"Property {property_string} check failed after {(time.time() - start_time):.6f} seconds")
+            print_debug(f"Property {property_string} check failed after {(time.perf_counter() - start_time):.6f} seconds")
         return -1.0
 
 
 def check_target_reachability(smg_file: str, print_probabilities: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False) -> str:
     if debug:
-        start_time = time.time()
+        start_time = time.perf_counter()
     if use_global_path:
-        smg_file = posixpath.join(GLOBAL_IN_OUT_PATH, smg_file)
+        smg_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, smg_file)
     if debug:
-        pre_prob1_time = time.time()
+        pre_prob1_time = time.perf_counter()
     result1 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmin=? [F \"target\"]", debug=debug)
     if debug:
-        print_debug(f"First prob checking time: {(time.time() - pre_prob1_time):.6f}")
+        print_debug(f"First prob checking time: {(time.perf_counter() - pre_prob1_time):.6f}")
     if result1 == -1.0:
         result = "Could not check minimum probability of reaching a target for eve.\n"
     else:
         result = f"Minimum probability of reaching a target state for eve: {str(result1)}\n"
     if debug:
-        pre_prob2_time = time.time()
+        pre_prob2_time = time.perf_counter()
     result2 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmax=? [F \"target\"]", debug=debug)
     if debug:
-        print_debug(f"Second prob checking time: {(time.time() - pre_prob2_time):.6f}")
+        print_debug(f"Second prob checking time: {(time.perf_counter() - pre_prob2_time):.6f}")
     if result2 == -1.0:
         result += "Could not check maximum probability of reaching a target for eve.\n"
     else:
@@ -386,59 +389,94 @@ def check_target_reachability(smg_file: str, print_probabilities: bool = False, 
     if print_probabilities:
         print(result)
     if debug:
-        print_debug(f"Target reachability check completed in {(time.time() - start_time):.6f} seconds")
+        print_debug(f"Target reachability check completed in {(time.perf_counter() - start_time):.6f} seconds")
     return result
 
 
 def save_smg_file(content: str, file_name: str = "", force: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False):
     if debug:
-        start_time = time.time()
+        start_time = time.perf_counter()
     if not file_name:
         file_name = "out.smg"
     if use_global_path:
-        file_name = posixpath.join(GLOBAL_IN_OUT_PATH, file_name)
+        file_name = os.path.join(GLOBAL_IN_OUT_PATH, file_name)
     if not file_name.endswith(".smg"):
         print_warning(f"File {file_name} is not an .smg file. Nothing was changed")
-    elif not force and path_exists(file_name) and get_linux_path_size(file_name) != 0:
+    elif not force and os.path.exists(file_name) and os.path.getsize(file_name) > 0:
         print_warning(f"File {file_name} already exists. Nothing was changed")
     else:
-        write_linux_file(file_name, content)
+        try:
+            with open(file_name, "w") as file:
+                file.write(content)
+        except Exception as e:
+            print_warning(f"Could not save SMG file {file_name}. Error: {str(e)}")
+            return
     if debug:
-        print_debug(f"SMG file {file_name} created in {(time.time() - start_time):.6f} seconds")
+        print_debug(f"SMG file {file_name} created in {(time.perf_counter() - start_time):.6f} seconds")
 
 
 def create_dot_file(smg_file: str, dot_file: str = "", force: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False):
     if debug:
-        start_time = time.time()
+        start_time = time.perf_counter()
     if use_global_path:
-        smg_file = posixpath.join(GLOBAL_IN_OUT_PATH, smg_file)
+        if not IS_OS_LINUX:
+            smg_file_win = os.path.join(GLOBAL_IN_OUT_PATH_WINDOWS, smg_file)
+        smg_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, smg_file)
     if not dot_file:
+        if not IS_OS_LINUX:
+            dot_file_win = smg_file_win.replace(".smg", ".dot")
         dot_file = smg_file.replace(".smg", ".dot")
     if use_global_path:
-        dot_file = posixpath.join(GLOBAL_IN_OUT_PATH, dot_file)
-    if not force and path_exists(dot_file) and get_linux_path_size(dot_file) != 0:
-        print_warning("DOT file already exists. Nothing was changed")
+        if not IS_OS_LINUX:
+            dot_file_win = os.path.join(GLOBAL_IN_OUT_PATH_WINDOWS, dot_file_win)
+        dot_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, dot_file)
+    if not IS_OS_LINUX:
+        if not force and os.path.exists(dot_file_win) and os.path.getsize(dot_file_win) > 0:
+            print_warning("DOT file already exists. Nothing was changed")
+        else:
+            run_command_linux(f"{sh_escape(PRISM_PATH)} {sh_escape(smg_file)} -exporttransdotstates {sh_escape(dot_file)}", use_shell=True, debug=debug)
     else:
-        run_command(f"{sh_escape(PRISM_PATH)} {sh_escape(smg_file)} -exporttransdotstates {sh_escape(dot_file)}", use_shell=True, debug=debug)
+        if not force and os.path.exists(dot_file) and os.path.getsize(dot_file) > 0:
+            print_warning("DOT file already exists. Nothing was changed")
+        else:
+            run_command_linux(f"{sh_escape(PRISM_PATH)} {sh_escape(smg_file)} -exporttransdotstates {sh_escape(dot_file)}", use_shell=True, debug=debug)
     if debug:
-        print_debug(f"DOT file {dot_file} created in {(time.time() - start_time):.6f} seconds")
+        print_debug(f"DOT file {dot_file} created in {(time.perf_counter() - start_time):.6f} seconds")
 
 
 def create_png_file(dot_file: str, png_file: str = "", open_png: bool = False, force: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False):
     if debug:
-        start_time = time.time()
+        start_time = time.perf_counter()
     if use_global_path:
-        dot_file = posixpath.join(GLOBAL_IN_OUT_PATH, dot_file)
+        if not IS_OS_LINUX:
+            dot_file_win = os.path.join(GLOBAL_IN_OUT_PATH_WINDOWS, dot_file)
+        dot_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, dot_file)
     if not png_file:
+        if not IS_OS_LINUX:
+            png_file_win = dot_file_win.replace(".dot", ".png")
         png_file = dot_file.replace(".dot", ".png")
     if use_global_path:
-        png_file = posixpath.join(GLOBAL_IN_OUT_PATH, png_file)
-    if not force and path_exists(png_file) and get_linux_path_size(png_file) != 0:
-        print_warning(f"PNG file {png_file} already exists. Nothing was changed")
+        if not IS_OS_LINUX:
+            png_file_win = os.path.join(GLOBAL_IN_OUT_PATH_WINDOWS, png_file_win)
+        png_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, png_file)
+    if not IS_OS_LINUX:
+        if not force and os.path.exists(png_file_win) and os.path.getsize(png_file_win) > 0:
+            print_warning("PNG file already exists. Nothing was changed")
+        else:
+            run_command("dot -Tpng " + dot_file_win + " -o " + png_file_win, use_shell=True, debug=debug)
     else:
-        run_command(f"dot -Tpng  {sh_escape(dot_file)} -o {sh_escape(png_file)}", use_shell=True, debug=debug)
+        if not force and os.path.exists(png_file) and os.path.getsize(png_file) > 0:
+            print_warning("PNG file already exists. Nothing was changed")
+        else:
+            run_command(f"dot -Tpng {sh_escape(dot_file)} -o {sh_escape(png_file)}", use_shell=True, debug=debug)
     if open_png:
-        run_command(f"xdg-open {sh_escape(png_file)}", use_shell=True, debug=debug)
+        if IS_OS_LINUX:
+            run_command(f"xdg-open {png_file}", use_shell=True, debug=debug)
+        else:
+            run_command(f"start {png_file_win}", use_shell=True, debug=debug)
     if debug:
-        print_debug(f"PNG file {png_file} created in {(time.time() - start_time):.6f} seconds")
+        print_debug(f"PNG file {dot_file} created in {(time.perf_counter() - start_time):.6f} seconds")
 
+
+# create_dot_file("raphael2.smg", force=True, use_global_path=True)
+# create_png_file("raphael2.dot", force=True, use_global_path=True, open_png=True)

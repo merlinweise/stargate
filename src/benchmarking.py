@@ -9,16 +9,15 @@ import io
 from multiprocessing import Process, Queue
 import queue as pyqueue  # to handle Empty exception
 
-from src.settings import PRISM_PATH
-from src.shell_commands import read_linux_file_lines
+from src.settings import IS_OS_LINUX
 from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability
 from simplestochasticgame import SsgVertex, SsgTransition, SimpleStochasticGame, is_deadlock_vertex
 from error_handling import print_error, print_debug
-from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH, GLOBAL_IN_OUT_PATH_WIN
-from shell_commands import run_command, path_exists, get_linux_path_size, remove_file, write_linux_file, sh_escape
+from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_LINUX, GLOBAL_IN_OUT_PATH_WINDOWS, GLOBAL_IN_OUT_PATH, PRISM_PATH
+from shell_commands import run_command_linux, sh_escape
 
 
-def make_list_from_string(s: str) -> list[int | float]:
+def make_float_list_from_string(s: str) -> list[float]:
     """
     Converts a string representation of a list of integers into an actual list of integers.
     :param s: String representation of a list of integers
@@ -28,17 +27,33 @@ def make_list_from_string(s: str) -> list[int | float]:
     try:
         new_list = []
         for x in s.strip("[]").split(","):
-            if x.strip().isdigit():
-                new_list.append(int(x.strip()))
-            else:
-                try:
-                    new_list.append(float(x.strip()))
-                except ValueError:
-                    pass
+            new_list.append(float(x.strip()))
         return new_list
     except Exception as e:
         print(f"Error converting string to list: {e}")
         return []
+
+
+def make_int_list_from_string(s: str) -> list[int]:
+    try:
+        new_list = []
+        for x in s.strip("[]").split(","):
+            new_list.append(int(x.strip()))
+        return new_list
+    except Exception as e:
+        print(f"Error converting string to list: {e}")
+        return []
+
+
+def make_str_int_tuple_from_string(s: str) -> tuple[str, str, int, int]:
+    try:
+        parts = s.strip("[]").split(",")
+        if len(parts) != 4:
+            raise ValueError("String does not contain exactly 4 parts.")
+        return parts[0].strip(), parts[1].strip(), int(parts[2].strip()), int(parts[3].strip())
+    except Exception as e:
+        print_error(f"Error converting string to tuple: {s}")
+        return "", "", -1, -1
 
 
 def create_random_ssg(number_of_vertices: int, number_of_transitions: int, number_of_target_vertices: int, no_additional_selfloops: bool = False, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
@@ -251,13 +266,19 @@ def check_smg_stats(smg_file: str, debug: bool = GLOBAL_DEBUG, use_global_path: 
     :type use_global_path: bool
     """
     if use_global_path:
-        smg_file = posixpath.join(GLOBAL_IN_OUT_PATH, smg_file)
-    if not path_exists(smg_file):
-        print_error(f"SMG file {smg_file} does not exist.")
+        if not IS_OS_LINUX:
+            smg_file_win = os.path.join(GLOBAL_IN_OUT_PATH_WINDOWS, smg_file)
+        smg_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, smg_file)
+    if IS_OS_LINUX:
+        if not os.path.exists(smg_file):
+            print_error(f"SMG file {smg_file} does not exist.")
+    else:
+        if not os.path.exists(smg_file_win):
+            print_error(f"SMG file {smg_file_win} does not exist.")
     command = f"{sh_escape(PRISM_PATH)} {sh_escape(smg_file)} -noprobchecks"
     if debug:
         print_debug(f"Running command: {command}")
-    result = run_command(command, use_shell=True)
+    result = run_command_linux(command, use_shell=True)
     if result.returncode != 0:
         print_error(f"Error running command: {result.stderr}")
     output = result.stdout
@@ -328,12 +349,13 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, save
     all_v2_vertices = []
     all_v1_transitions = []
     all_v2_transitions = []
+
     if result_path is None:
         result_path = f"benchmark_results_normal_{ssg_count}_{ssg_type}_{size_param}.txt"
     if use_global_path:
-        result_path = posixpath.join(GLOBAL_IN_OUT_PATH, result_path)
+        result_path = os.path.join(GLOBAL_IN_OUT_PATH, result_path)
     if save_results is None:
-        save_results = False if not force and path_exists(result_path) and get_linux_path_size(result_path) > 0 else True
+        save_results = False if not force and os.path.exists(result_path) and os.path.getsize(result_path) > 0 else True
     if debug:
         match ssg_type:
             case "random":
@@ -383,15 +405,15 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, save
         vert_v2, trans_v2, build_time2 = check_smg_stats(f"ssg_{i + 1}_v2.smg", use_global_path=True)
 
         if use_global_path:
-            smg_v1_path = posixpath.join(GLOBAL_IN_OUT_PATH, f"ssg_{i+1}_v1.smg")
-            smg_v2_path = posixpath.join(GLOBAL_IN_OUT_PATH, f"ssg_{i+1}_v2.smg")
+            smg_v1_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i+1}_v1.smg")
+            smg_v2_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i+1}_v2.smg")
         else:
             smg_v1_path = f"ssg_{i+1}_v1.smg"
             smg_v2_path = f"ssg_{i+1}_v2.smg"
         if trans_v1_time == 0.0 or trans_v2_time == 0.0 or prop_v1_time == 0.0 or prop_v2_time == 0.0:
             print_error(f"Error: Transformation or property checking time is 0.0 for SSG {i+1}.")
-        remove_file(smg_v1_path)
-        remove_file(smg_v2_path)
+        os.remove(smg_v1_path)
+        os.remove(smg_v2_path)
 
         all_v1_trans_times.append(trans_v1_time)
         all_v2_trans_times.append(trans_v2_time)
@@ -414,7 +436,8 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, save
         output += str(all_v1_transitions) + "\n"
         output += str(all_v2_transitions) + "\n"
         output += f"[norm, {ssg_type}, {ssg_count}, {size_param}]" + "\n"
-        write_linux_file(result_path, output)
+        with open(result_path, "w") as f:
+            f.write(output)
 
     return all_v1_trans_times, all_v2_trans_times, all_v1_prop_times, all_v2_prop_times, all_v1_vertices, all_v2_vertices, all_v1_transitions, all_v2_transitions, ("norm", ssg_type, ssg_count, size_param)
 
@@ -478,17 +501,18 @@ def single_iteration_for_exponential_benchmark(ssg_type: str, i: int, use_global
     vert_v2, trans_v2, build_time2 = check_smg_stats(f"ssg_{i + 1}_v2.smg", use_global_path=use_global_path)
 
     if use_global_path:
-        smg_v1_path = posixpath.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v1.smg")
-        smg_v2_path = posixpath.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v2.smg")
+        smg_v1_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v1.smg")
+        smg_v2_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v2.smg")
     else:
         smg_v1_path = f"ssg_{i + 1}_v1.smg"
         smg_v2_path = f"ssg_{i + 1}_v2.smg"
     if trans_v1_time == 0.0 or trans_v2_time == 0.0 or prop_v1_time == 0.0 or prop_v2_time == 0.0:
         print_error(f"Error: Transformation or property checking time is 0.0 for SSG {i + 1}.")
+
     return trans_v1_time, trans_v2_time, prop_v1_time, prop_v2_time, vert_v1, vert_v2, trans_v1, trans_v2, smg_v1_path, smg_v2_path, size_param
 
 
-def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, save_results: bool = None, result_path: str = None, use_global_path: bool = True, force: bool = True, debug: bool = GLOBAL_DEBUG) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]:
+def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 120, save_results: bool = None, result_path: str = None, use_global_path: bool = True, force: bool = True, debug: bool = GLOBAL_DEBUG) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]:
     """
         Benchmark the creation and property checking of multiple SSGs.
         :param ssg_type: Type of SSG to create (random, binary, empty)
@@ -520,9 +544,9 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, sav
     if result_path is None:
         result_path = f"benchmark_results_exponential_{ssg_type}_max_{time_per_iteration}.txt"
     if use_global_path:
-        result_path = posixpath.join(GLOBAL_IN_OUT_PATH, result_path)
+        result_path = os.path.join(GLOBAL_IN_OUT_PATH, result_path)
     if save_results is None:
-        save_results = False if not force and path_exists(result_path) and get_linux_path_size(result_path) > 0 else True
+        save_results = False if not force and os.path.exists(result_path) and os.path.getsize(result_path) > 0 else True
     if debug:
         match ssg_type:
             case "random":
@@ -544,7 +568,7 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, sav
     i = 0
     while True:
         q = Queue()
-        p = Process(target=_iteration_worker, args=(q, ssg_type, i, debug, use_global_path))
+        p = Process(target=_iteration_worker, args=(q, ssg_type, i, use_global_path))
         start_time = time.perf_counter()
         p.start()
         p.join(timeout=time_per_iteration)
@@ -555,13 +579,18 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, sav
                 print_debug(f"Timeout of {time_per_iteration} seconds reached for SSG {i + 1}.")
             p.terminate()
             p.join()
-            for path in [f"ssg_{i + 1}_v1.smg", f"ssg_{i + 1}_v2.smg"]:
-                try:
-                    remove_file(posixpath.join(GLOBAL_IN_OUT_PATH, path) if use_global_path else path)
-                except FileNotFoundError:
-                    pass
+            try:
+                if use_global_path:
+                    smg_v1_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v1.smg")
+                    smg_v2_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v2.smg")
+                else:
+                    smg_v1_path = f"ssg_{i + 1}_v1.smg"
+                    smg_v2_path = f"ssg_{i + 1}_v2.smg"
+                os.remove(smg_v1_path)
+                os.remove(smg_v2_path)
+            except FileNotFoundError:
+                pass
             break
-
         try:
             result = q.get_nowait()
         except pyqueue.Empty:
@@ -586,8 +615,8 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, sav
 
         # Remove temporary .smg files
         try:
-            remove_file(smg_v1_path)
-            remove_file(smg_v2_path)
+            os.remove(smg_v1_path)
+            os.remove(smg_v2_path)
         except FileNotFoundError:
             pass
 
@@ -602,7 +631,10 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, sav
         all_v2_transitions.append(trans_v2)
 
         i += 1
-
+    if ssg_type == "binary":
+        size_param = i + 2
+    else:
+        size_param = (2 ** (i + 1))
     if save_results:
         output = str(all_v1_trans_times) + "\n"
         output += str(all_v2_trans_times) + "\n"
@@ -613,12 +645,13 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 600, sav
         output += str(all_v1_transitions) + "\n"
         output += str(all_v2_transitions) + "\n"
         output += f"[ex, {ssg_type}, {size_param}, {time_per_iteration}]" + "\n"
-        write_linux_file(result_path, output)
+        with open(result_path, "w") as f:
+            f.write(output)
 
     return all_v1_trans_times, all_v2_trans_times, all_v1_prop_times, all_v2_prop_times, all_v1_vertices, all_v2_vertices, all_v1_transitions, all_v2_transitions, ("ex", ssg_type, size_param, time_per_iteration)
 
 
-def read_benchmark_results(file_path: str, use_global_path: bool = True) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int]]:
+def read_benchmark_results(file_path: str, use_global_path: bool = True) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]:
     """
     Read benchmark results from a file.
     :param file_path: Path to the benchmark results file
@@ -629,11 +662,12 @@ def read_benchmark_results(file_path: str, use_global_path: bool = True) -> tupl
     :rtype: tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int]]
     """
     if use_global_path:
-        file_path = posixpath.join(GLOBAL_IN_OUT_PATH, file_path)
-    content = read_linux_file_lines(file_path)
+        file_path = os.path.join(GLOBAL_IN_OUT_PATH, file_path)
+    with open(file_path, "r") as f:
+        content = f.readlines()
     if len(content) < 8:
         raise ValueError(f"File {file_path} does not contain enough data. Expected 8 lines, got {len(content)}.")
-    return make_list_from_string(content[0].replace("\n", "")), make_list_from_string(content[1].replace("\n", "")), make_list_from_string(content[2].replace("\n", "")), make_list_from_string(content[3].replace("\n", "")), make_list_from_string(content[4].replace("\n", "")), make_list_from_string(content[5].replace("\n", "")), make_list_from_string(content[6].replace("\n", "")), make_list_from_string(content[7].replace("\n", ""))
+    return make_float_list_from_string(content[0].replace("\n", "")), make_float_list_from_string(content[1].replace("\n", "")), make_float_list_from_string(content[2].replace("\n", "")), make_float_list_from_string(content[3].replace("\n", "")), make_int_list_from_string(content[4].replace("\n", "")), make_int_list_from_string(content[5].replace("\n", "")), make_int_list_from_string(content[6].replace("\n", "")), make_int_list_from_string(content[7].replace("\n", "")), make_str_int_tuple_from_string(content[8].replace("\n", ""))
 
 
 def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: list[float], all_v1_prop_times: list[float], all_v2_prop_times: list[float], all_v1_vertices: list[int], all_v2_vertices: list[int], all_v1_transitions: list[int], all_v2_transitions: list[int], benchmark_info: tuple[str, str, int, int], show_times: bool = True, show_stats: bool = True, plot_name: str = None, save_plots: bool = False, use_global_path: bool = True) -> None:
@@ -780,7 +814,7 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
     if save_plots:
         filename = f"{plot_name}_times_combined.png"
         if use_global_path:
-            filename = posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", "exponential", filename)
+            filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", "exponential", filename)
         fig.savefig(filename)
 
     if not show_times:
@@ -830,7 +864,7 @@ def plot_benchmark_results(all_v1_trans_times: list[float], all_v2_trans_times: 
     if save_plots:
         filename = f"{plot_name}_stats_combined.png"
         if use_global_path:
-            filename = posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", "exponential", filename)
+            filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", "exponential", filename)
         fig_stat.savefig(filename)
 
     if not show_stats:
@@ -889,9 +923,7 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
     ssg_type_array = np.array(ssg_type)
 
     colors = {"random": 'red', "random_no_additional_selfloops": 'orange', "binary": 'green', "complete": 'blue', "chain": 'purple', "empty": 'gray'}
-    col = np.array([colors[ssg_type] for ssg_type in ssg_type_array])
     labels = {"random": 'Random', "random_no_additional_selfloops": 'Random (No Additional Self-Loops)', "binary": 'Binary Tree', "complete": 'Complete Graph', "chain": 'Chain', "empty": 'Empty'}
-    lab = np.array([labels[ssg_type] for ssg_type in ssg_type_array])
 
     mean_v1_tt = np.mean(all_v1_tt)
     std_v1_tt = np.std(all_v1_tt)
@@ -987,24 +1019,13 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
     if save_plots:
         filename = f"{plot_name}_times_combined"
         if use_global_path:
-            if os.name == 'nt':
-                if os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", filename + ".png")):
-                    i = 1
-                    while os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", f"{filename}_{i} + .png")):
-                        i += 1
-                    filename = os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", f"{filename}_{i}")
-                else:
-                    filename = os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", filename)
-            elif os.name == 'posix':
-                if os.path.exists(posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename + ".png")):
-                    i = 1
-                    while os.path.exists(posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i} + .png")):
-                        i += 1
-                    filename = posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i}")
-                else:
-                    filename = posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename)
+            if os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename + ".png")):
+                i = 1
+                while os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i} + .png")):
+                    i += 1
+                filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i}")
             else:
-                raise ValueError(f"Unknown OS: {os.name}. Expected 'nt' or 'posix'.")
+                filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename)
         fig.savefig(filename + ".png")
 
     if not show_times:
@@ -1050,25 +1071,14 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
     if save_plots:
         filename = f"{plot_name}_stats_combined"
         if use_global_path:
-            if os.name == 'nt':
-                if os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", filename + ".png")):
-                    i = 1
-                    while os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", f"{filename}_{i} + .png")):
-                        i += 1
-                    filename = os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", f"{filename}_{i}")
-                else:
-                    filename = os.path.join(GLOBAL_IN_OUT_PATH_WIN, "benchmarks", filename)
-            elif os.name == 'posix':
-                if os.path.exists(posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename + ".png")):
-                    i = 1
-                    while os.path.exists(posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i} + .png")):
-                        i += 1
-                    filename = posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i}")
-                else:
-                    filename = posixpath.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename)
+            if os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename + ".png")):
+                i = 1
+                while os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i} + .png")):
+                    i += 1
+                filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i}")
             else:
-                raise (ValueError(f"Unknown OS: {os.name}. Expected 'nt' or 'posix'."))
-        fig_stat.savefig(filename + ".png")
+                filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename)
+        fig.savefig(filename + ".png")
 
     if not show_stats:
         plt.close(fig_stat)
@@ -1078,114 +1088,26 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
 
 
 def main():
-    """
-    Main function to run the benchmark for different SSG types.
-    """
-    p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
-        "random",
-        time_per_iteration=1800,
-        use_global_path=True,
-        debug=True,
-        force=True,
-        save_results=False
-    )
-    plot_benchmark_results(
-        p1, p2, p3, p4, p5, p6, p7, p8,
-        benchmark_info=info,
-        use_global_path=True,
-        save_plots=True,
-        show_times=False,
-        show_stats=False
-    )
-    p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
-        "random_no_additional_selfloops",
-        time_per_iteration=1800,
-        use_global_path=True,
-        debug=True,
-        force=True,
-        save_results=False
-    )
-    plot_benchmark_results(
-        p1, p2, p3, p4, p5, p6, p7, p8,
-        benchmark_info=info,
-        use_global_path=True,
-        save_plots=True,
-        show_times=False,
-        show_stats=False
-    )
-    p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
-        "binary",
-        time_per_iteration=1800,
-        use_global_path=True,
-        debug=True,
-        force=True,
-        save_results=False
-    )
-    plot_benchmark_results(
-        p1, p2, p3, p4, p5, p6, p7, p8,
-        benchmark_info=info,
-        use_global_path=True,
-        save_plots=True,
-        show_times=False,
-        show_stats=False
-    )
-    p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
-        "complete",
-        time_per_iteration=1800,
-        use_global_path=True,
-        debug=True,
-        force=True,
-        save_results=False
-    )
-    plot_benchmark_results(
-        p1, p2, p3, p4, p5, p6, p7, p8,
-        benchmark_info=info,
-        use_global_path=True,
-        save_plots=True,
-        show_times=False,
-        show_stats=False
-    )
-    p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
-        "chain",
-        time_per_iteration=1800,
-        use_global_path=True,
-        debug=True,
-        force=True,
-        save_results=False
-    )
-    plot_benchmark_results(
-        p1, p2, p3, p4, p5, p6, p7, p8,
-        benchmark_info=info,
-        use_global_path=True,
-        save_plots=True,
-        show_times=False,
-        show_stats=False
-    )
-    p1, p2, p3, p4, p5, p6, p7, p8, info = benchmark_exponential_ssgs(
-        "empty",
-        time_per_iteration=1800,
-        use_global_path=True,
-        debug=True,
-        force=True,
-        save_results=False
-    )
-    plot_benchmark_results(
-        p1, p2, p3, p4, p5, p6, p7, p8,
-        benchmark_info=info,
-        use_global_path=True,
-        save_plots=True,
-        show_times=False,
-        show_stats=False
-    )
+    list_of_benchmark_results = [(benchmark_exponential_ssgs(ssg_type="random", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True))]
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="random_no_additional_selfloops", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="binary", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="complete", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="chain", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="empty", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
+    plot_combined_benchmark_results(list_of_benchmark_results, show_times=True, show_stats=True, plot_name="test_benchmark_exponential_combined", save_plots=True, use_global_path=True)
 
 
-"""if __name__ == '__main__':
+if __name__ == '__main__':
     import multiprocessing
     multiprocessing.freeze_support()  # Optional, hilft bei frozen executables
-    main()"""
+    main()
 
 # read_benchmark_results("benchmarks/test_benchmark_file.txt", use_global_path=True)
 
 # plot_benchmark_results([1, 10, 100, 1000], [1, 20, 50, 1500], [1, 10, 100, 1000], [1, 20, 50, 1500], [1, 10, 100, 1000], [1, 20, 50, 1500], [1, 10, 100, 1000], [1, 20, 50, 1500], ("ex", "random", -1, -1), True, True, "test_plot", False, use_global_path=True)
 
-plot_combined_benchmark_results([([1.0], [0.5], [0.5], [1.0], [10], [20], [20], [10], ("ex", "random", 1, 1)), ([1.0, 5.0], [2.0, 10.0], [10.0, 50.0], [20.0, 100.0], [10.0, 20.0], [20.0, 40.0], [100.0, 200.0], [200.0, 400.0], ("normal", "empty", 1, 1))], show_times=False, show_stats=False, plot_name="test_combined_plot", save_plots=True, use_global_path=True)
+# plot_combined_benchmark_results([([1.0], [0.5], [0.5], [1.0], [10], [20], [20], [10], ("ex", "random", 1, 1)), ([1.0, 5.0], [2.0, 10.0], [10.0, 50.0], [20.0, 100.0], [10.0, 20.0], [20.0, 40.0], [100.0, 200.0], [200.0, 400.0], ("normal", "empty", 1, 1))], show_times=False, show_stats=False, plot_name="test_combined_plot", save_plots=True, use_global_path=True)
+
+# benchmark_multiple_ssgs(3, "random", 10, True,use_global_path=True, force=True, debug=True)
+# lis = read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\PRISMgames_testing\\program_in_and_out\\benchmark_results_normal_3_random_10.txt", use_global_path=True)
+# plot_combined_benchmark_results([lis], show_times=True, show_stats=True, plot_name="test_combined_plot", save_plots=True, use_global_path=True)

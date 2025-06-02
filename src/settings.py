@@ -1,14 +1,16 @@
 import os
 import subprocess
 
-GLOBAL_IN_OUT_PATH = "/mnt/c/Uni_Zeug/6.Semester/Bachelorarbeit/PRISMgames_testing/program_in_and_out"  # needs to be in Linux format
-GLOBAL_IN_OUT_PATH_WIN = "C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\PRISMgames_testing\\program_in_and_out"  # needs to be in Windows format
+GLOBAL_IN_OUT_PATH_LINUX = "/mnt/c/Uni_Zeug/6.Semester/Bachelorarbeit/PRISMgames_testing/program_in_and_out"  # needs to be in Linux format
+GLOBAL_IN_OUT_PATH_WINDOWS = "C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\PRISMgames_testing\\program_in_and_out"  # needs to be in Windows format
+GLOBAL_IN_OUT_PATH = GLOBAL_IN_OUT_PATH_LINUX if os.name == 'posix' else GLOBAL_IN_OUT_PATH_WINDOWS
 GLOBAL_DEBUG = False
 PRINT_VERTEX_CREATION_WARNINGS = False
 ENSURE_EVE_AND_ADAM_VERTICES = True
 PRISM_EPSILON = 1e-6
+MAX_ITERS = 1000000000
 PRISM_PATH = "/mnt/c/Uni_Zeug/6.Semester/Bachelorarbeit/prism_extension/Algorithms-For-Stochastic-Games/prism-games-3.0.beta-src/prism/bin/prism"
-PRISM_SOLVING_ALGORITHM = "GAUSS_SEIDEL_VALUE_ITERATION"  # "VALUE_ITERATION" or "GAUSS_SEIDEL_VALUE_ITERATION" or "POLICY_ITERATION" or "MODIFIED_POLICY_ITERATION" or "INTERVAL_ITERATION" or "SOUND_VALUE_ITERATION" or "TOPOLOGICAL VALUE_ITERATION" or "SOUND_TOPOLOGICAL_VALUE_ITERATION" or "SOUND_POLICY_ITERATION" or "SOUND_MODIFIED_POLICY_ITERATION"
+PRISM_SOLVING_ALGORITHM = "INTERVAL_ITERATION"  # "VALUE_ITERATION" or "GAUSS_SEIDEL_VALUE_ITERATION" or "POLICY_ITERATION" or "MODIFIED_POLICY_ITERATION" or "INTERVAL_ITERATION" or "SOUND_VALUE_ITERATION" or "TOPOLOGICAL VALUE_ITERATION" or "SOUND_TOPOLOGICAL_VALUE_ITERATION" or "SOUND_POLICY_ITERATION" or "SOUND_MODIFIED_POLICY_ITERATION"
 
 
 # ----------------------------------------------------------------------------------------------------------------

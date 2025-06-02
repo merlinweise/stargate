@@ -1,10 +1,9 @@
-import sys
+import os
 import re
-import posixpath
 import time
-from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH, PRINT_VERTEX_CREATION_WARNINGS, ENSURE_EVE_AND_ADAM_VERTICES
+
 from error_handling import print_warning, print_error, print_debug, is_float_expr, float_or_fraction
-from shell_commands import get_linux_path_size, path_exists, write_linux_file, read_linux_file_lines
+from settings import GLOBAL_DEBUG, PRINT_VERTEX_CREATION_WARNINGS, ENSURE_EVE_AND_ADAM_VERTICES, GLOBAL_IN_OUT_PATH
 
 
 class SsgVertex:
@@ -194,13 +193,14 @@ def read_ssg_from_file(file_name, use_global_path: bool = False, debug: bool = G
     :rtype: SimpleStochasticGame
     """
     if debug:
-        start_time = time.time()
+        start_time = time.perf_counter()
     if use_global_path:
-        file_name = posixpath.join(GLOBAL_IN_OUT_PATH, file_name)
+        file_name = os.path.join(GLOBAL_IN_OUT_PATH, file_name)
     if file_name[-4:] != ".ssg":
         print_error("Not a .ssg file")
     try:
-        content = read_linux_file_lines(file_name)
+        with open(file_name, "r") as file:
+            content = file.readlines()
     except FileNotFoundError:
         print_error(f"File '{file_name}' not found.")
     except Exception as e:
@@ -331,9 +331,8 @@ def read_ssg_from_file(file_name, use_global_path: bool = False, debug: bool = G
                 print_error(f"File does not comply with ssg specification. Line {current_line_index + 1}: {content[current_line_index]}")
             case _:
                 print_error("Undefined state")
-                sys.exit(1)
     if debug:
-        print_debug(f"SSG file {file_name} read in {(time.time() - start_time):.6f} seconds")
+        print_debug(f"SSG file {file_name} read in {(time.perf_counter() - start_time):.6f} seconds")
     return SimpleStochasticGame(ssg_vertices, ssg_transitions, ssg_initial_vertex)
 
 
@@ -390,19 +389,22 @@ def save_ssg_file(ssg_spec: str, file_name: str = "", use_global_path: bool = Fa
     :type debug: bool
     """
     if debug:
-        start_time = time.time()
+        start_time = time.perf_counter()
     if not file_name:
         file_name = "out.ssg"
     if use_global_path:
-        file_name = posixpath.join(GLOBAL_IN_OUT_PATH, file_name)
+        file_name = os.path.join(GLOBAL_IN_OUT_PATH, file_name)
     if not file_name.endswith(".ssg"):
         print_warning(f"File {file_name} is not an .ssg file. Nothing was changed")
-    elif not force and path_exists(file_name) and get_linux_path_size(file_name) != 0:
+    elif not force and os.path.exists(file_name) and os.path.getsize(file_name) != 0:
         print_warning(f"File {file_name} already exists. Nothing was changed")
     else:
-        write_linux_file(file_name, ssg_spec)
+        with open(file_name, "w") as file:
+            file.write(ssg_spec)
+            if debug:
+                print_debug(f"SSG file {file_name} saved successfully")
     if debug:
-        print_debug(f"SSG file {file_name} created in {(time.time() - start_time):.6f} seconds")
+        print_debug(f"SSG file {file_name} created in {(time.perf_counter() - start_time):.6f} seconds")
 
 
 def reformat_ssgspec(file_name: str, use_global_path: bool = False, force: bool = False, debug: bool = GLOBAL_DEBUG):
@@ -418,11 +420,11 @@ def reformat_ssgspec(file_name: str, use_global_path: bool = False, force: bool 
     :type debug: bool
     """
     if debug:
-        start_time = time.time()
+        start_time = time.perf_counter()
     if use_global_path:
-        file_name = posixpath.join(GLOBAL_IN_OUT_PATH, file_name)
+        file_name = os.path.join(GLOBAL_IN_OUT_PATH, file_name)
     ssg = read_ssg_from_file(file_name=file_name, use_global_path=use_global_path, debug=False)
     content = ssg_to_ssgspec(ssg)
     save_ssg_file(ssg_spec=content, file_name=file_name, use_global_path=use_global_path, force=force, debug=False)
     if debug:
-        print_debug(f"SSG file {file_name} reformatted in {(time.time() - start_time):.6f} seconds")
+        print_debug(f"SSG file {file_name} reformatted in {(time.perf_counter() - start_time):.6f} seconds")

@@ -1,6 +1,6 @@
 from fractions import Fraction
 from math import factorial
-from settings import *
+
 from src.simpleparitygame import SimpleParityGame, read_spg_from_file
 from src.simplestochasticgame import SimpleStochasticGame, SsgVertex, SsgTransition
 
