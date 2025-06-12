@@ -4,79 +4,79 @@ import time
 import re
 import posixpath
 
-from stochasticreachgame import StochasticReachGame, SrgTransition, SrgVertex
+from simplestochasticgame import SimpleStochasticGame, SsgTransition, SsgVertex
 from shell_commands import run_command, sh_escape, run_command_linux
 from error_handling import print_warning, print_debug
 from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_LINUX, PRISM_PATH, MAX_ITERS, PRISM_EPSILON, PRISM_SOLVING_ALGORITHM, GLOBAL_IN_OUT_PATH, IS_OS_LINUX, GLOBAL_IN_OUT_PATH_WINDOWS
 
 
-def srg_to_smgspec(srg: StochasticReachGame, version1: bool = False, debug: bool = GLOBAL_DEBUG, print_correspondingvertices: bool = False) -> str:
+def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: bool = GLOBAL_DEBUG, print_correspondingvertices: bool = False) -> str:
     if debug:
         start_time = time.perf_counter()
     content = "smg\n\n"
     if version1:
-        srg = copy.deepcopy(srg)
+        ssg = copy.deepcopy(ssg)
         i = 1
         while True:
-            if srg.has_action(f"extra_eve_action{i}"):
+            if ssg.has_action(f"extra_eve_action{i}"):
                 i += 1
             else:
                 extra_eve_act = f"extra_eve_action{i}"
                 break
         i = 1
         while True:
-            if srg.has_action(f"extra_adam_action{i}"):
+            if ssg.has_action(f"extra_adam_action{i}"):
                 i += 1
             else:
                 extra_adam_act = f"extra_adam_action{i}"
                 break
-        additional_srg_transitions = dict()
-        for transition in srg.transitions.values():
+        additional_ssg_transitions = dict()
+        for transition in ssg.transitions.values():
             if len(transition.end_vertices) == 1:
                 if transition.start_vertex == next(iter(transition.end_vertices))[1]:
                     continue
                 elif transition.start_vertex.is_eve and next(iter(transition.end_vertices))[1].is_eve:
-                    new_trans_vert = srg.add_extra_vert(False)
-                    additional_srg_transitions[new_trans_vert, extra_adam_act] = SrgTransition(new_trans_vert, {(1.0, next(iter(transition.end_vertices))[1])}, extra_adam_act)
-                    additional_srg_transitions[transition.start_vertex, transition.action] = (SrgTransition(transition.start_vertex, {(1.0, new_trans_vert)}, transition.action))
+                    new_trans_vert = ssg.add_extra_vert(False)
+                    additional_ssg_transitions[new_trans_vert, extra_adam_act] = SsgTransition(new_trans_vert, {(1.0, next(iter(transition.end_vertices))[1])}, extra_adam_act)
+                    additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, {(1.0, new_trans_vert)}, transition.action))
                 elif not transition.start_vertex.is_eve and not next(iter(transition.end_vertices))[1].is_eve:
-                    new_trans_vert = srg.add_extra_vert(True)
-                    additional_srg_transitions[new_trans_vert, extra_eve_act] = SrgTransition(new_trans_vert, {(1.0, next(iter(transition.end_vertices))[1])}, extra_eve_act)
-                    additional_srg_transitions[transition.start_vertex, transition.action] = (SrgTransition(transition.start_vertex, {(1.0, new_trans_vert)}, transition.action))
+                    new_trans_vert = ssg.add_extra_vert(True)
+                    additional_ssg_transitions[new_trans_vert, extra_eve_act] = SsgTransition(new_trans_vert, {(1.0, next(iter(transition.end_vertices))[1])}, extra_eve_act)
+                    additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, {(1.0, new_trans_vert)}, transition.action))
             else:
                 if transition.start_vertex.is_eve:
-                    new_trans_verts: dict[SrgVertex, SrgVertex] = dict()
-                    new_end_verts: set[tuple[float, SrgVertex]] = set()
+                    new_trans_verts: dict[SsgVertex, SsgVertex] = dict()
+                    new_end_verts: set[tuple[float, SsgVertex]] = set()
                     for prob, vert in transition.end_vertices:
                         if vert.is_eve:
-                            new_trans_verts[vert] = srg.add_extra_vert(False)
-                            additional_srg_transitions[new_trans_verts[vert], extra_adam_act] = (SrgTransition(new_trans_verts[vert], {(1.0, vert)}, extra_adam_act))
+                            new_trans_verts[vert] = ssg.add_extra_vert(False)
+                            additional_ssg_transitions[new_trans_verts[vert], extra_adam_act] = (SsgTransition(new_trans_verts[vert], {(1.0, vert)}, extra_adam_act))
                             new_end_verts.add((prob, new_trans_verts[vert]))
                         else:
                             new_end_verts.add((prob, vert))
-                    additional_srg_transitions[transition.start_vertex, transition.action] = (SrgTransition(transition.start_vertex, new_end_verts, transition.action))
+                    additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, new_end_verts, transition.action))
                 else:
-                    new_trans_verts: dict[SrgVertex, SrgVertex] = dict()
-                    new_end_verts: set[tuple[float, SrgVertex]] = set()
+                    new_trans_verts: dict[SsgVertex, SsgVertex] = dict()
+                    new_end_verts: set[tuple[float, SsgVertex]] = set()
                     for prob, vert in transition.end_vertices:
                         if not vert.is_eve:
-                            new_trans_verts[vert] = srg.add_extra_vert(True)
-                            additional_srg_transitions[new_trans_verts[vert], extra_eve_act] = (SrgTransition(new_trans_verts[vert], {(1.0, vert)}, extra_eve_act))
+                            new_trans_verts[vert] = ssg.add_extra_vert(True)
+                            additional_ssg_transitions[new_trans_verts[vert], extra_eve_act] = (SsgTransition(new_trans_verts[vert], {(1.0, vert)}, extra_eve_act))
                             new_end_verts.add((prob, new_trans_verts[vert]))
                         else:
                             new_end_verts.add((prob, vert))
-                    additional_srg_transitions[transition.start_vertex, transition.action] = (SrgTransition(transition.start_vertex, new_end_verts, transition.action))
-        srg.transitions |= additional_srg_transitions
-        if not sanity_check_alternating_vertices(srg):
-            print_warning("The SRG is not alternating. The generated SMG may not be correct.")
-        new_vertices: dict[SrgVertex, tuple[int, int]] = dict()
-        srg_eve_actions: set[str] = set()
-        srg_adam_actions: set[str] = set()
+                    additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, new_end_verts, transition.action))
+        ssg.transitions |= additional_ssg_transitions
+        if not sanity_check_alternating_vertices(ssg):
+            print_warning("The SSG is not alternating. The generated SMG may not be correct.")
+        new_vertices: dict[SsgVertex, tuple[int, int]] = dict()
+        ssg_eve_actions: set[str] = set()
+        ssg_adam_actions: set[str] = set()
         new_eve_actions: dict[str, str] = dict()
         new_adam_actions: dict[str, str] = dict()
-        new_transitions: dict[SrgTransition, tuple[tuple[int, int], str, set[tuple[float, tuple[int, int]]]]] = dict()
+        new_transitions: dict[SsgTransition, tuple[tuple[int, int], str, set[tuple[float, tuple[int, int]]]]] = dict()
         eve_vert_count, adam_vert_count, eve_act_count, adam_act_count = 1, 1, 1, 1
-        for vert in srg.vertices.values():
+        for vert in ssg.vertices.values():
             if vert.is_eve:
                 new_vertices[vert] = (eve_vert_count, 0)
                 eve_vert_count += 1
@@ -86,23 +86,23 @@ def srg_to_smgspec(srg: StochasticReachGame, version1: bool = False, debug: bool
 
         if print_correspondingvertices:
             print("Corresponding vertices:")
-            for vert in srg.vertices.values():
+            for vert in ssg.vertices.values():
                 print(f"{vert.name} -> {new_vertices[vert]}")
-        new_init_vertex = new_vertices[srg.init_vertex]
-        for transition in srg.transitions.values():
+        new_init_vertex = new_vertices[ssg.init_vertex]
+        for transition in ssg.transitions.values():
             if transition.start_vertex.is_eve:
-                srg_eve_actions.add(transition.action)
+                ssg_eve_actions.add(transition.action)
             else:
-                srg_adam_actions.add(transition.action)
+                ssg_adam_actions.add(transition.action)
 
-        for action in srg_eve_actions:
+        for action in ssg_eve_actions:
             new_eve_actions[action] = f"e{eve_act_count}"
             eve_act_count += 1
 
-        for action in srg_adam_actions:
+        for action in ssg_adam_actions:
             new_adam_actions[action] = f"a{adam_act_count}"
             adam_act_count += 1
-        for transition in srg.transitions.values():
+        for transition in ssg.transitions.values():
             if transition.start_vertex.is_eve:
                 new_transitions[transition] = (new_vertices[transition.start_vertex], new_eve_actions[transition.action], set())
                 for prob, vert in transition.end_vertices:
@@ -151,14 +151,14 @@ def srg_to_smgspec(srg: StochasticReachGame, version1: bool = False, debug: bool
                 adam_mod += f"\t[{new_adam_actions[transition.action]}] (es={new_transitions[transition][0][0]} & as={new_transitions[transition][0][1]}) \t-> (as'=0) ;\n"
         content += eve_mod + "endmodule\n\n" + adam_mod + "endmodule"
     else:
-        new_vertices: dict[SrgVertex, tuple[int, int]] = dict()
-        srg_eve_actions: set[str] = set()
-        srg_adam_actions: set[str] = set()
+        new_vertices: dict[SsgVertex, tuple[int, int]] = dict()
+        ssg_eve_actions: set[str] = set()
+        ssg_adam_actions: set[str] = set()
         new_eve_actions: dict[str, str] = dict()
         new_adam_actions: dict[str, str] = dict()
-        new_transitions: dict[SrgTransition, tuple[tuple[int, int], str, set[tuple[float, tuple[int, int]]]]] = dict()
+        new_transitions: dict[SsgTransition, tuple[tuple[int, int], str, set[tuple[float, tuple[int, int]]]]] = dict()
         eve_vert_count, adam_vert_count, eve_act_count, adam_act_count = 1, 1, 1, 1
-        for vert in srg.vertices.values():
+        for vert in ssg.vertices.values():
             if vert.is_eve:
                 new_vertices[vert] = (eve_vert_count, 0)
                 eve_vert_count += 1
@@ -167,21 +167,21 @@ def srg_to_smgspec(srg: StochasticReachGame, version1: bool = False, debug: bool
                 adam_vert_count += 1
         if print_correspondingvertices:
             print("Corresponding vertices:")
-            for vert in srg.vertices.values():
+            for vert in ssg.vertices.values():
                 print(f"{vert.name} -> {new_vertices[vert]}")
-        new_init_vertex = new_vertices[srg.init_vertex]
-        for transition in srg.transitions.values():
+        new_init_vertex = new_vertices[ssg.init_vertex]
+        for transition in ssg.transitions.values():
             if transition.start_vertex.is_eve:
-                srg_eve_actions.add(transition.action)
+                ssg_eve_actions.add(transition.action)
             else:
-                srg_adam_actions.add(transition.action)
-        for action in srg_eve_actions:
+                ssg_adam_actions.add(transition.action)
+        for action in ssg_eve_actions:
             new_eve_actions[action] = f"e{eve_act_count}"
             eve_act_count += 1
-        for action in srg_adam_actions:
+        for action in ssg_adam_actions:
             new_adam_actions[action] = f"a{adam_act_count}"
             adam_act_count += 1
-        for transition in srg.transitions.values():
+        for transition in ssg.transitions.values():
             if transition.start_vertex.is_eve:
                 new_transitions[transition] = (
                     new_vertices[transition.start_vertex], new_eve_actions[transition.action], set())
@@ -195,29 +195,29 @@ def srg_to_smgspec(srg: StochasticReachGame, version1: bool = False, debug: bool
         content += "player eve\n\tevemod"
         for act in new_eve_actions.values():
             content += f", [{act}]"
-        if has_eve_probabilistic_actions(srg):
+        if has_eve_probabilistic_actions(ssg):
             content += ", [ep]"
         content += "\nendplayer\n\nplayer adam\n\tadammod"
         for act in new_adam_actions.values():
             content += f", [{act}]"
-        if has_adam_probabilistic_actions(srg):
+        if has_adam_probabilistic_actions(ssg):
             content += ", [ap]"
         content += "\nendplayer\n\n"
         eve_mod = f"module evemod\n\te1 : [0..{eve_vert_count-1}] init {new_init_vertex[0]} ;\n\te2 : [0..{adam_vert_count-1}] init {new_init_vertex[1]} ;\n"
-        if has_eve_probabilistic_actions(srg):
+        if has_eve_probabilistic_actions(ssg):
             eve_mod += f"\tre : [0..1] init 0 ;\n"
         adam_mod = f"module adammod\n\ta1 : [0..{eve_vert_count-1}] init {new_init_vertex[0]} ;\n\ta2 : [0..{adam_vert_count-1}] init {new_init_vertex[1]} ;\n"
-        if has_adam_probabilistic_actions(srg):
+        if has_adam_probabilistic_actions(ssg):
             adam_mod += f"\tra : [0..1] init 0 ;\n"
         rande_extra = ""
         randa_extra = ""
-        if has_eve_probabilistic_actions(srg):
+        if has_eve_probabilistic_actions(ssg):
             rande_extra = " & re=0"
-        if has_adam_probabilistic_actions(srg):
+        if has_adam_probabilistic_actions(ssg):
             randa_extra = " & ra=0"
         for transition in new_transitions:
             if transition.start_vertex.is_eve:
-                if not is_srg_vertex_probabilistic(srg, transition.start_vertex):
+                if not is_ssg_vertex_probabilistic(ssg, transition.start_vertex):
                     eve_mod += (f"\t[{new_eve_actions[transition.action]}] (e1={new_transitions[transition][0][0]} & e2={new_transitions[transition][0][1]}" + rande_extra + f") \t-> (e1'={next(iter(new_transitions[transition][2]))[1][0]}) & (e2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n")
                     adam_mod += (f"\t[{new_eve_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]}" + rande_extra + f") \t-> (a1'={next(iter(new_transitions[transition][2]))[1][0]}) & (a2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n")
                 else:
@@ -232,7 +232,7 @@ def srg_to_smgspec(srg: StochasticReachGame, version1: bool = False, debug: bool
                         eve_mod = eve_mod[:-3] + " ;\n"
                         adam_mod += f"\t[{new_eve_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]} & re=0) \t-> true ;\n"
             else:
-                if not is_srg_vertex_probabilistic(srg, transition.start_vertex):
+                if not is_ssg_vertex_probabilistic(ssg, transition.start_vertex):
                     adam_mod += (f"\t[{new_adam_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]}" + randa_extra + f") \t-> (a1'={next(iter(new_transitions[transition][2]))[1][0]}) & (a2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n")
                     eve_mod += (f"\t[{new_adam_actions[transition.action]}] (e1={new_transitions[transition][0][0]} & e2={new_transitions[transition][0][1]}" + rande_extra + f") \t-> (e1'={next(iter(new_transitions[transition][2]))[1][0]}) & (e2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n")
                 else:
@@ -246,15 +246,15 @@ def srg_to_smgspec(srg: StochasticReachGame, version1: bool = False, debug: bool
                             adam_mod += f"({prob}) : (a1'={vert[0]}) & (a2'={vert[1]}) & (ra'=1) + "
                         adam_mod = adam_mod[:-3] + " ;\n"
                         eve_mod += f"\t[{new_adam_actions[transition.action]}] (e1={new_transitions[transition][0][0]} & e2={new_transitions[transition][0][1]} & ra=0) \t-> true ;\n"
-        if has_eve_probabilistic_actions(srg):
+        if has_eve_probabilistic_actions(ssg):
             eve_mod += f"\t[ep] (re=1) \t\t\t\t-> (re' = 0) ;\n"
             adam_mod += f"\t[ep] (re=1) \t\t\t\t-> (a1'= e1) & (a2' = e2) ;\n"
-        if has_adam_probabilistic_actions(srg):
+        if has_adam_probabilistic_actions(ssg):
             adam_mod += f"\t[ap] (ra=1) \t\t\t\t-> (ra' = 0) ;\n"
             eve_mod += f"\t[ap] (ra=1) \t\t\t\t-> (e1' = a1) & (e2' = a2) ;\n"
         content += eve_mod + "endmodule\n\n" + adam_mod + "endmodule"
     content += "\n\nlabel \"target\" = ("
-    for vertex in srg.vertices.values():
+    for vertex in ssg.vertices.values():
         if vertex.is_target:
             if version1:
                 content += f"(es={new_vertices[vertex][0]}) & (as={new_vertices[vertex][1]}) | "
@@ -269,17 +269,17 @@ def srg_to_smgspec(srg: StochasticReachGame, version1: bool = False, debug: bool
     return content
 
 
-def is_srg_vertex_probabilistic(srg: StochasticReachGame, state: SrgVertex) -> bool:
+def is_ssg_vertex_probabilistic(ssg: SimpleStochasticGame, state: SsgVertex) -> bool:
     """
-    Checks if the given state in the StochasticReachGame has probabilistic transitions.
+    Checks if the given state in the SimpleStochasticGame has probabilistic transitions.
     This is used to determine if the state has multiple end vertices with different probabilities.
     Needed for version 2 of the SMG specification.
-    :param srg: The StochasticReachGame to check.
-    :type srg: StochasticReachGame
+    :param ssg: The SimpleStochasticGame to check.
+    :type ssg: SimpleStochasticGame
     :param state:
     :return:
     """
-    for transition in srg.transitions.values():
+    for transition in ssg.transitions.values():
         if transition.start_vertex == state:
             if len(transition.end_vertices) > 1:
                 return True
@@ -287,47 +287,47 @@ def is_srg_vertex_probabilistic(srg: StochasticReachGame, state: SrgVertex) -> b
     return False
 
 
-def has_eve_probabilistic_actions(srg: StochasticReachGame) -> bool:
+def has_eve_probabilistic_actions(ssg: SimpleStochasticGame) -> bool:
     """
-    Checks if the StochasticReachGame has any probabilistic actions for Eve.
+    Checks if the SimpleStochasticGame has any probabilistic actions for Eve.
     Needed for version 2 of the SMG specification.
-    :param srg: The StochasticReachGame to check.
-    :type srg: StochasticReachGame
+    :param ssg: The SimpleStochasticGame to check.
+    :type ssg: SimpleStochasticGame
     :return: True if Eve has probabilistic actions, False otherwise.
     :rtype: bool
     """
-    for transition in srg.transitions.values():
+    for transition in ssg.transitions.values():
         if transition.start_vertex.is_eve and len(transition.end_vertices) > 1:
             return True
             break
     return False
 
 
-def has_adam_probabilistic_actions(srg: StochasticReachGame) -> bool:
+def has_adam_probabilistic_actions(ssg: SimpleStochasticGame) -> bool:
     """
-    Checks if the StochasticReachGame has any probabilistic actions for Adam.
+    Checks if the SimpleStochasticGame has any probabilistic actions for Adam.
     Needed for version 2 of the SMG specification.
-    :param srg: The StochasticReachGame to check.
-    :type srg: StochasticReachGame
+    :param ssg: The SimpleStochasticGame to check.
+    :type ssg: SimpleStochasticGame
     :return: True if Adam has probabilistic actions, False otherwise.
     :rtype: bool
     """
-    for transition in srg.transitions.values():
+    for transition in ssg.transitions.values():
         if not transition.start_vertex.is_eve and len(transition.end_vertices) > 1:
             return True
             break
     return False
 
 
-def sanity_check_alternating_vertices(srg: StochasticReachGame) -> bool:
+def sanity_check_alternating_vertices(ssg: SimpleStochasticGame) -> bool:
     """
-    Checks if the SRG is alternating, meaning that transitions from eve vertices lead to adam vertices and vice versa.
-    :param srg: The StochasticReachGame to check.
-    :type srg: StochasticReachGame
-    :return: True if the SRG is alternating, False otherwise.
+    Checks if the SSG is alternating, meaning that transitions from eve vertices lead to adam vertices and vice versa.
+    :param ssg: The SimpleStochasticGame to check.
+    :type ssg: SimpleStochasticGame
+    :return: True if the SSG is alternating, False otherwise.
     :rtype: bool
     """
-    for transition in srg.transitions.values():
+    for transition in ssg.transitions.values():
         if len(transition.end_vertices) == 1 and transition.start_vertex == next(iter(transition.end_vertices))[1]:
             continue
         if transition.start_vertex.is_eve:

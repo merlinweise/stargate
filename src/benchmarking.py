@@ -10,8 +10,8 @@ import queue as pyqueue
 from multiprocessing import Process, Queue
 
 from settings import IS_OS_LINUX
-from srg_to_smg import srg_to_smgspec, save_smg_file, check_target_reachability
-from stochasticreachgame import SrgVertex, SrgTransition, StochasticReachGame, is_deadlock_vertex
+from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability
+from simplestochasticgame import SsgVertex, SsgTransition, SimpleStochasticGame, is_deadlock_vertex
 from error_handling import print_error, print_debug
 from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_LINUX, GLOBAL_IN_OUT_PATH_WINDOWS, GLOBAL_IN_OUT_PATH, PRISM_PATH
 from shell_commands import run_command_linux, sh_escape
@@ -56,82 +56,82 @@ def make_str_int_tuple_from_string(s: str) -> tuple[str, str, int, int]:
         return "", "", -1, -1
 
 
-def create_random_srg(number_of_vertices: int, number_of_transitions: int, number_of_target_vertices: int, no_additional_selfloops: bool = False, debug: bool = GLOBAL_DEBUG) -> StochasticReachGame:
+def create_random_ssg(number_of_vertices: int, number_of_transitions: int, number_of_target_vertices: int, no_additional_selfloops: bool = False, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
     """
-    Create a new SRG with random parameters.
-    :param number_of_vertices: Maximum number of vertices in the SRG
+    Create a new SSG with random parameters.
+    :param number_of_vertices: Maximum number of vertices in the SSG
     :type number_of_vertices: int
-    :param number_of_transitions: Maximum number of transitions in the SRG
+    :param number_of_transitions: Maximum number of transitions in the SSG
     :type number_of_transitions: int
-    :param number_of_target_vertices: Maximum number of target vertices in the SRG
+    :param number_of_target_vertices: Maximum number of target vertices in the SSG
     :type number_of_target_vertices: int
     :param no_additional_selfloops: Whether to add additional self-loops
     :type no_additional_selfloops: bool
     :param debug: Whether to print debug information
     :type debug: bool
-    :return: SRG with random parameters
-    :rtype: StochasticReachGame
+    :return: SSG with random parameters
+    :rtype: SimpleStochasticGame
     """
     if debug:
         start_time = time.time()
 
-    vertices: dict[str, SrgVertex] = dict()
+    vertices: dict[str, SsgVertex] = dict()
     for i in range(number_of_vertices):
-        vertices[f"vertex_{i}"] = SrgVertex(f"vertex_{i}", bool(random.randint(0, 1)), False)
+        vertices[f"vertex_{i}"] = SsgVertex(f"vertex_{i}", bool(random.randint(0, 1)), False)
     target_vertices = random.sample(list(vertices.values()), number_of_target_vertices)
     for vertex in target_vertices:
         vertex.is_target = True
     init_vertex = random.choice(list(vertices.values()))
-    transitions: dict[tuple[SrgVertex, str], SrgTransition] = dict()
+    transitions: dict[tuple[SsgVertex, str], SsgTransition] = dict()
     action = 0
     for start_vertex in vertices.values():
         type_of_transition = random.choice([0, 1])
         if type_of_transition == 0:
             end_vertex = random.choice(list(vertices.values()))
-            transitions[(start_vertex, str(action))] = SrgTransition(start_vertex, {(1.0, end_vertex)}, str(action))
+            transitions[(start_vertex, str(action))] = SsgTransition(start_vertex, {(1.0, end_vertex)}, str(action))
         else:
             end_vertices = random.sample(list(vertices.values()), 2)
-            transitions[(start_vertex, str(action))] = SrgTransition(start_vertex, {(0.5, end_vertices[0]), (0.5, end_vertices[1])}, str(action))
+            transitions[(start_vertex, str(action))] = SsgTransition(start_vertex, {(0.5, end_vertices[0]), (0.5, end_vertices[1])}, str(action))
         action += 1
     for i in range(number_of_transitions-number_of_vertices):
         start_vertex = random.choice(list(vertices.values()))
         type_of_transition = random.choice([0, 1])
         if type_of_transition == 0:
             end_vertex = random.choice(list(vertices.values()))
-            transitions[(start_vertex, str(action))] = SrgTransition(start_vertex, {(1.0, end_vertex)}, str(action))
+            transitions[(start_vertex, str(action))] = SsgTransition(start_vertex, {(1.0, end_vertex)}, str(action))
         else:
             end_vertices = random.sample(list(vertices.values()), 2)
-            transitions[(start_vertex, str(action))] = SrgTransition(start_vertex, {(0.5, end_vertices[0]), (0.5, end_vertices[1])}, str(action))
+            transitions[(start_vertex, str(action))] = SsgTransition(start_vertex, {(0.5, end_vertices[0]), (0.5, end_vertices[1])}, str(action))
         action += 1
     if no_additional_selfloops:
-        vertices["eve_sink"] = SrgVertex("eve_sink", True, False)
-        vertices["adam_sink"] = SrgVertex("adam_sink", False, False)
-        transitions[(vertices["eve_sink"], str(action))] = SrgTransition(vertices["eve_sink"], {(1.0, vertices["eve_sink"])}, str(action))
-        transitions[(vertices["adam_sink"], str(action))] = SrgTransition(vertices["adam_sink"], {(1.0, vertices["adam_sink"])}, str(action))
+        vertices["eve_sink"] = SsgVertex("eve_sink", True, False)
+        vertices["adam_sink"] = SsgVertex("adam_sink", False, False)
+        transitions[(vertices["eve_sink"], str(action))] = SsgTransition(vertices["eve_sink"], {(1.0, vertices["eve_sink"])}, str(action))
+        transitions[(vertices["adam_sink"], str(action))] = SsgTransition(vertices["adam_sink"], {(1.0, vertices["adam_sink"])}, str(action))
         for vertex in vertices.values():
             if vertex.name != "eve_sink" and vertex.name != "adam_sink":
                 if is_deadlock_vertex(vertex, transitions):
                     if vertex.is_eve:
-                        transitions[(vertex, str(action))] = SrgTransition(vertex, {(1.0, vertices["adam_sink"])}, "b")
+                        transitions[(vertex, str(action))] = SsgTransition(vertex, {(1.0, vertices["adam_sink"])}, "b")
                     else:
-                        transitions[(vertex, str(action))] = SrgTransition(vertex, {(1.0, vertices["eve_sink"])}, "b")
+                        transitions[(vertex, str(action))] = SsgTransition(vertex, {(1.0, vertices["eve_sink"])}, "b")
     if debug:
-        print_debug(f"Created random SRG with {len(vertices)} vertices and {len(transitions)} transitions in {time.time() - start_time:.2f} seconds.")
+        print_debug(f"Created random SSG with {len(vertices)} vertices and {len(transitions)} transitions in {time.time() - start_time:.2f} seconds.")
 
-    return StochasticReachGame(vertices, transitions, init_vertex)
+    return SimpleStochasticGame(vertices, transitions, init_vertex)
 
 
-def create_binary_tree_srg(number_of_layers: int, share_of_target_vertices: float, debug: bool = GLOBAL_DEBUG) -> StochasticReachGame:
+def create_binary_tree_ssg(number_of_layers: int, share_of_target_vertices: float, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
     """
-    Create a binary tree SRG with the given number of layers and target vertices.
+    Create a binary tree SSG with the given number of layers and target vertices.
     :param number_of_layers: Number of layers in the binary tree
     :type number_of_layers: int
     :param share_of_target_vertices: Share of target vertices in the binary tree
     :type share_of_target_vertices: float
     :param debug: Whether to print debug information
     :type debug: bool
-    :return: Binary tree SRG
-    :rtype: StochasticReachGame
+    :return: Binary tree SSG
+    :rtype: SimpleStochasticGame
     """
     if debug:
         start_time = time.time()
@@ -141,7 +141,7 @@ def create_binary_tree_srg(number_of_layers: int, share_of_target_vertices: floa
     for layer in range(number_of_layers):
         for i in range(2 ** layer):
             vertex_name = f"layer_{layer}_vertex_{i}"
-            vertices[vertex_name] = SrgVertex(vertex_name, False, False)
+            vertices[vertex_name] = SsgVertex(vertex_name, False, False)
             if random.randint(0, 1) == 1:
                 vertices[vertex_name].is_eve = True
 
@@ -150,7 +150,7 @@ def create_binary_tree_srg(number_of_layers: int, share_of_target_vertices: floa
                 parent_vertex_name = f"layer_{layer - 1}_vertex_{parent_index}"
 
                 if i % 2 != 0:
-                    transitions[(vertices[parent_vertex_name], "a")] = SrgTransition(vertices[parent_vertex_name], {(0.5, vertices[vertex_name]), (0.5, vertices[f"layer_{layer}_vertex_{i - 1}"])}, "a")
+                    transitions[(vertices[parent_vertex_name], "a")] = SsgTransition(vertices[parent_vertex_name], {(0.5, vertices[vertex_name]), (0.5, vertices[f"layer_{layer}_vertex_{i - 1}"])}, "a")
             if layer == number_of_layers - 1:
                 leaves.append(vertices[vertex_name])
     if 0 <= share_of_target_vertices <= 1:
@@ -161,27 +161,27 @@ def create_binary_tree_srg(number_of_layers: int, share_of_target_vertices: floa
         vertex.is_target = True
     init_vertex = vertices["layer_0_vertex_0"]
     if debug:
-        print_debug(f"Created binary tree SRG with {len(vertices)} vertices and {len(transitions)} transitions in {time.time() - start_time:.2f} seconds.")
-    return StochasticReachGame(vertices, transitions, init_vertex)
+        print_debug(f"Created binary tree SSG with {len(vertices)} vertices and {len(transitions)} transitions in {time.time() - start_time:.2f} seconds.")
+    return SimpleStochasticGame(vertices, transitions, init_vertex)
 
 
-def create_complete_graph_srg(number_of_vertices: int, number_of_target_vertices: int, debug: bool = GLOBAL_DEBUG) -> StochasticReachGame:
+def create_complete_graph_ssg(number_of_vertices: int, number_of_target_vertices: int, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
     """
-    Create a complete graph SRG with the given number of vertices and target vertices.
-    :param number_of_vertices: Number of vertices in the SRG
+    Create a complete graph SSG with the given number of vertices and target vertices.
+    :param number_of_vertices: Number of vertices in the SSG
     :type number_of_vertices: int
-    :param number_of_target_vertices: Number of target vertices in the SRG
+    :param number_of_target_vertices: Number of target vertices in the SSG
     :type number_of_target_vertices: int
     :param debug: Whether to print debug information
     :type debug: bool
-    :return: Complete graph SRG
-    :rtype: StochasticReachGame
+    :return: Complete graph SSG
+    :rtype: SimpleStochasticGame
     """
     vertices = {}
     transitions = {}
     for i in range(number_of_vertices):
         vertex_name = f"vertex_{i}"
-        vertices[vertex_name] = SrgVertex(vertex_name, False, False)
+        vertices[vertex_name] = SsgVertex(vertex_name, False, False)
         if random.randint(0, 1) == 1:
             vertices[vertex_name].is_eve = True
     target_vertices = random.sample(list(vertices.values()), number_of_target_vertices)
@@ -190,23 +190,23 @@ def create_complete_graph_srg(number_of_vertices: int, number_of_target_vertices
     action = 0
     for start_vertex in vertices.values():
         for end_vertex in vertices.values():
-            transitions[(start_vertex, str(action))] = SrgTransition(start_vertex, {(1.0, end_vertex)}, str(action))
+            transitions[(start_vertex, str(action))] = SsgTransition(start_vertex, {(1.0, end_vertex)}, str(action))
             action += 1
     init_vertex = vertices["vertex_0"]
     if debug:
-        print_debug(f"Created complete graph SRG with {len(vertices)} vertices and {len(transitions)} transitions.")
-    return StochasticReachGame(vertices, transitions, init_vertex)
+        print_debug(f"Created complete graph SSG with {len(vertices)} vertices and {len(transitions)} transitions.")
+    return SimpleStochasticGame(vertices, transitions, init_vertex)
 
 
-def create_chain_srg(number_of_vertices: int, debug: bool = GLOBAL_DEBUG) -> StochasticReachGame:
+def create_chain_ssg(number_of_vertices: int, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
     """
-    Create a chain SRG with the given number of vertices.
-    :param number_of_vertices: Number of vertices in the SRG
+    Create a chain SSG with the given number of vertices.
+    :param number_of_vertices: Number of vertices in the SSG
     :type number_of_vertices: int
     :param debug: Whether to print debug information
     :type debug: bool
-    :return: Chain SRG
-    :rtype: StochasticReachGame
+    :return: Chain SSG
+    :rtype: SimpleStochasticGame
     """
     if debug is None:
         debug = GLOBAL_DEBUG
@@ -216,29 +216,29 @@ def create_chain_srg(number_of_vertices: int, debug: bool = GLOBAL_DEBUG) -> Sto
     transitions = {}
     for i in range(number_of_vertices):
         vertex_name = f"vertex_{i}"
-        vertices[vertex_name] = SrgVertex(vertex_name, False, False)
+        vertices[vertex_name] = SsgVertex(vertex_name, False, False)
         if random.randint(0, 1) == 1:
             vertices[vertex_name].is_eve = True
         if i == number_of_vertices - 1:
             vertices[vertex_name].is_target = True
 
         if i > 0:
-            transitions[(vertices[f"vertex_{i-1}"], "a")] = SrgTransition(vertices[f"vertex_{i - 1}"], {(0.5, vertices[vertex_name]), (0.5, vertices["vertex_0"])}, "a")
+            transitions[(vertices[f"vertex_{i-1}"], "a")] = SsgTransition(vertices[f"vertex_{i - 1}"], {(0.5, vertices[vertex_name]), (0.5, vertices["vertex_0"])}, "a")
     init_vertex = vertices["vertex_0"]
     if debug:
-        print_debug(f"Created chain SRG with {len(vertices)} vertices and {len(transitions)} transitions in {time.time() - start_time:.2f} seconds.")
-    return StochasticReachGame(vertices, transitions, init_vertex)
+        print_debug(f"Created chain SSG with {len(vertices)} vertices and {len(transitions)} transitions in {time.time() - start_time:.2f} seconds.")
+    return SimpleStochasticGame(vertices, transitions, init_vertex)
 
 
-def create_empty_srg(number_of_vertices: int, debug: bool = GLOBAL_DEBUG) -> StochasticReachGame:
+def create_empty_ssg(number_of_vertices: int, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
     """
-    Create an empty SRG with the given number of vertices.
-    :param number_of_vertices: Number of vertices in the SRG
+    Create an empty SSG with the given number of vertices.
+    :param number_of_vertices: Number of vertices in the SSG
     :type number_of_vertices: int
     :param debug: Whether to print debug information
     :type debug: bool
-    :return: Empty SRG
-    :rtype: StochasticReachGame
+    :return: Empty SSG
+    :rtype: SimpleStochasticGame
     """
     if debug:
         start_time = time.time()
@@ -246,14 +246,14 @@ def create_empty_srg(number_of_vertices: int, debug: bool = GLOBAL_DEBUG) -> Sto
     transitions = {}
     for i in range(number_of_vertices):
         vertex_name = f"vertex_{i}"
-        vertices[vertex_name] = SrgVertex(vertex_name, False, False)
+        vertices[vertex_name] = SsgVertex(vertex_name, False, False)
         if random.randint(0, 1) == 1:
             vertices[vertex_name].is_eve = True
 
     init_vertex = vertices["vertex_0"]
     if debug:
-        print_debug(f"Created empty SRG with {len(vertices)} vertices and {len(transitions)} transitions in {time.time() - start_time:.2f} seconds.")
-    return StochasticReachGame(vertices, transitions, init_vertex)
+        print_debug(f"Created empty SSG with {len(vertices)} vertices and {len(transitions)} transitions in {time.time() - start_time:.2f} seconds.")
+    return SimpleStochasticGame(vertices, transitions, init_vertex)
 
 
 def check_smg_stats(smg_file: str, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False) -> tuple[int, int, float]:
@@ -319,14 +319,14 @@ def print_smg_stats(smg_file: str, debug: bool = GLOBAL_DEBUG, use_global_path: 
     print(output)
 
 
-def benchmark_multiple_srgs(srg_count: int, srg_type: str, size_param: int, save_results: bool = None, result_path: str = None, use_global_path: bool = False, force: bool = True, debug: bool = GLOBAL_DEBUG) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]:
+def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, save_results: bool = None, result_path: str = None, use_global_path: bool = False, force: bool = True, debug: bool = GLOBAL_DEBUG) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]:
     """
-    Benchmark the creation and property checking of multiple SRGs.
-    :param srg_count: Number of SRGs to create
-    :type srg_count: int
-    :param srg_type: Type of SRG to create (random, binary, empty)
-    :type srg_type: str
-    :param size_param: Size parameter for the SRG
+    Benchmark the creation and property checking of multiple SSGs.
+    :param ssg_count: Number of SSGs to create
+    :type ssg_count: int
+    :param ssg_type: Type of SSG to create (random, binary, empty)
+    :type ssg_type: str
+    :param size_param: Size parameter for the SSG
     :type size_param: int
     :param save_results: Whether to write the benchmark results to a file
     :type save_results: bool
@@ -334,7 +334,7 @@ def benchmark_multiple_srgs(srg_count: int, srg_type: str, size_param: int, save
     :type result_path: str
     :param use_global_path: Whether to use the global path for the SMG file
     :type use_global_path: bool
-    :param force: Whether to force the creation of the SRG
+    :param force: Whether to force the creation of the SSG
     :type force: bool
     :param debug: Whether to print debug information
     :type debug: bool
@@ -352,67 +352,67 @@ def benchmark_multiple_srgs(srg_count: int, srg_type: str, size_param: int, save
     all_v2_transitions = []
 
     if result_path is None:
-        result_path = f"benchmark_results_normal_{srg_count}_{srg_type}_{size_param}.txt"
+        result_path = f"benchmark_results_normal_{ssg_count}_{ssg_type}_{size_param}.txt"
     if use_global_path:
         result_path = os.path.join(GLOBAL_IN_OUT_PATH, result_path)
     if save_results is None:
         save_results = False if not force and os.path.exists(result_path) and os.path.getsize(result_path) > 0 else True
     if debug:
-        match srg_type:
+        match ssg_type:
             case "random":
-                print_debug(f"Creating {srg_count} random SRGs with {size_param} vertices and {5 * size_param} transitions.")
+                print_debug(f"Creating {ssg_count} random SSGs with {size_param} vertices and {5 * size_param} transitions.")
             case "random_no_additional_selfloops":
-                print_debug(f"Creating {srg_count} random SRGs with {size_param} vertices and {5 * size_param} transitions without additional self-loops.")
+                print_debug(f"Creating {ssg_count} random SSGs with {size_param} vertices and {5 * size_param} transitions without additional self-loops.")
             case "binary":
-                print_debug(f"Creating {srg_count} binary tree SRGs with {size_param} layers and {round(0.3 * (2 ** size_param) / 2)} target vertices.")
+                print_debug(f"Creating {ssg_count} binary tree SSGs with {size_param} layers and {round(0.3 * (2 ** size_param) / 2)} target vertices.")
             case "complete":
-                print_debug(f"Creating {srg_count} complete graph SRGs with {size_param} vertices and {max(1, size_param // 10)} target vertices.")
+                print_debug(f"Creating {ssg_count} complete graph SSGs with {size_param} vertices and {max(1, size_param // 10)} target vertices.")
             case "chain":
-                print_debug(f"Creating {srg_count} chain SRGs with {size_param} vertices.")
+                print_debug(f"Creating {ssg_count} chain SSGs with {size_param} vertices.")
             case _:
-                print_debug(f"Creating {srg_count} empty SRGs with {size_param} vertices.")
-    for i in range(srg_count):
+                print_debug(f"Creating {ssg_count} empty SSGs with {size_param} vertices.")
+    for i in range(ssg_count):
         if debug:
-            print_debug(f"{i}/{srg_count} SRGs created and evaluated.")
-        if srg_type == "random":
-            srg_i = create_random_srg(size_param, 5 * size_param, max(1, size_param // 10), no_additional_selfloops=False)
-        elif srg_type == "random_no_additional_selfloops":
-            srg_i = create_random_srg(size_param, 5 * size_param, max(1, size_param // 10), no_additional_selfloops=True)
-        elif srg_type == "binary":
-            srg_i = create_binary_tree_srg(size_param, 0.3)
-        elif srg_type == "complete":
-            srg_i = create_complete_graph_srg(size_param, max(1, size_param // 10))
-        elif srg_type == "chain":
-            srg_i = create_chain_srg(size_param)
+            print_debug(f"{i}/{ssg_count} SSGs created and evaluated.")
+        if ssg_type == "random":
+            ssg_i = create_random_ssg(size_param, 5 * size_param, max(1, size_param // 10), no_additional_selfloops=False)
+        elif ssg_type == "random_no_additional_selfloops":
+            ssg_i = create_random_ssg(size_param, 5 * size_param, max(1, size_param // 10), no_additional_selfloops=True)
+        elif ssg_type == "binary":
+            ssg_i = create_binary_tree_ssg(size_param, 0.3)
+        elif ssg_type == "complete":
+            ssg_i = create_complete_graph_ssg(size_param, max(1, size_param // 10))
+        elif ssg_type == "chain":
+            ssg_i = create_chain_ssg(size_param)
         else:
-            srg_i = create_empty_srg(size_param)
+            ssg_i = create_empty_ssg(size_param)
 
         start_v1 = time.perf_counter()
-        smg_v1 = srg_to_smgspec(srg_i, version1=True)
+        smg_v1 = ssg_to_smgspec(ssg_i, version1=True)
         trans_v1_time = time.perf_counter() - start_v1
-        save_smg_file(smg_v1, f"srg_{i+1}_v1.smg", use_global_path=True, force=True)
+        save_smg_file(smg_v1, f"ssg_{i+1}_v1.smg", use_global_path=True, force=True)
         start_v1_prop = time.perf_counter()
-        check_target_reachability(f"srg_{i+1}_v1.smg", print_probabilities=False, use_global_path=True)
+        check_target_reachability(f"ssg_{i+1}_v1.smg", print_probabilities=False, use_global_path=True)
         prop_v1_time = time.perf_counter() - start_v1_prop
-        vert_v1, trans_v1, build_time1 = check_smg_stats(f"srg_{i + 1}_v1.smg", use_global_path=True)
+        vert_v1, trans_v1, build_time1 = check_smg_stats(f"ssg_{i + 1}_v1.smg", use_global_path=True)
 
         start_v2 = time.perf_counter()
-        smg_v2 = srg_to_smgspec(srg_i, version1=False)
+        smg_v2 = ssg_to_smgspec(ssg_i, version1=False)
         trans_v2_time = time.perf_counter() - start_v2
-        save_smg_file(smg_v2, f"srg_{i+1}_v2.smg", use_global_path=True, force=True)
+        save_smg_file(smg_v2, f"ssg_{i+1}_v2.smg", use_global_path=True, force=True)
         start_v2_prop = time.perf_counter()
-        check_target_reachability(f"srg_{i+1}_v2.smg", print_probabilities=False, use_global_path=True)
+        check_target_reachability(f"ssg_{i+1}_v2.smg", print_probabilities=False, use_global_path=True)
         prop_v2_time = time.perf_counter() - start_v2_prop
-        vert_v2, trans_v2, build_time2 = check_smg_stats(f"srg_{i + 1}_v2.smg", use_global_path=True)
+        vert_v2, trans_v2, build_time2 = check_smg_stats(f"ssg_{i + 1}_v2.smg", use_global_path=True)
 
         if use_global_path:
-            smg_v1_path = os.path.join(GLOBAL_IN_OUT_PATH, f"srg_{i+1}_v1.smg")
-            smg_v2_path = os.path.join(GLOBAL_IN_OUT_PATH, f"srg_{i+1}_v2.smg")
+            smg_v1_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i+1}_v1.smg")
+            smg_v2_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i+1}_v2.smg")
         else:
-            smg_v1_path = f"srg_{i+1}_v1.smg"
-            smg_v2_path = f"srg_{i+1}_v2.smg"
+            smg_v1_path = f"ssg_{i+1}_v1.smg"
+            smg_v2_path = f"ssg_{i+1}_v2.smg"
         if trans_v1_time == 0.0 or trans_v2_time == 0.0 or prop_v1_time == 0.0 or prop_v2_time == 0.0:
-            print_error(f"Error: Transformation or property checking time is 0.0 for SRG {i+1}.")
+            print_error(f"Error: Transformation or property checking time is 0.0 for SSG {i+1}.")
         os.remove(smg_v1_path)
         os.remove(smg_v2_path)
 
@@ -426,7 +426,7 @@ def benchmark_multiple_srgs(srg_count: int, srg_type: str, size_param: int, save
         all_v2_transitions.append(trans_v2)
 
     if debug:
-        print_debug(f"{srg_count}/{srg_count} SRGs created and evaluated.")
+        print_debug(f"{ssg_count}/{ssg_count} SSGs created and evaluated.")
     if save_results:
         output = str(all_v1_trans_times) + "\n"
         output += str(all_v2_trans_times) + "\n"
@@ -436,88 +436,88 @@ def benchmark_multiple_srgs(srg_count: int, srg_type: str, size_param: int, save
         output += str(all_v2_vertices) + "\n"
         output += str(all_v1_transitions) + "\n"
         output += str(all_v2_transitions) + "\n"
-        output += f"[norm, {srg_type}, {srg_count}, {size_param}]" + "\n"
+        output += f"[norm, {ssg_type}, {ssg_count}, {size_param}]" + "\n"
         with open(result_path, "w") as f:
             f.write(output)
 
-    return all_v1_trans_times, all_v2_trans_times, all_v1_prop_times, all_v2_prop_times, all_v1_vertices, all_v2_vertices, all_v1_transitions, all_v2_transitions, ("norm", srg_type, srg_count, size_param)
+    return all_v1_trans_times, all_v2_trans_times, all_v1_prop_times, all_v2_prop_times, all_v1_vertices, all_v2_vertices, all_v1_transitions, all_v2_transitions, ("norm", ssg_type, ssg_count, size_param)
 
 
-def _iteration_worker(q, srg_type, i, use_global_path):
+def _iteration_worker(q, ssg_type, i, use_global_path):
     """
     Worker function to run a single benchmark iteration and return results via Queue.
     :param q: Queue to put the results into
     :type q: Queue
-    :param srg_type: Type of SRG to create (random, binary, empty)
-    :type srg_type: str
-    :param i: Index of the SRG to create
+    :param ssg_type: Type of SSG to create (random, binary, empty)
+    :type ssg_type: str
+    :param i: Index of the SSG to create
     :type i: int
     :param use_global_path: Whether to use the global path for the SMG file
     :type use_global_path: bool
     """
     try:
-        result = single_iteration_for_exponential_benchmark(srg_type, i, use_global_path)
+        result = single_iteration_for_exponential_benchmark(ssg_type, i, use_global_path)
         q.put(result)
     except Exception as e:
         q.put(e)
 
 
-def single_iteration_for_exponential_benchmark(srg_type: str, i: int, use_global_path: bool = True) -> tuple[float, float, float, float, int, int, int, int, str, str, int]:
+def single_iteration_for_exponential_benchmark(ssg_type: str, i: int, use_global_path: bool = True) -> tuple[float, float, float, float, int, int, int, int, str, str, int]:
 
-    if srg_type == "binary":
+    if ssg_type == "binary":
         size_param = i + 2
     else:
         size_param = (2 ** (i + 1))
-    if srg_type == "random":
-        srg_i = create_random_srg(size_param, 5 * size_param, max(1, size_param // 10),
+    if ssg_type == "random":
+        ssg_i = create_random_ssg(size_param, 5 * size_param, max(1, size_param // 10),
                                   no_additional_selfloops=False)
-    elif srg_type == "random_no_additional_selfloops":
-        srg_i = create_random_srg(size_param, 5 * size_param, max(1, size_param // 10),
+    elif ssg_type == "random_no_additional_selfloops":
+        ssg_i = create_random_ssg(size_param, 5 * size_param, max(1, size_param // 10),
                                   no_additional_selfloops=True)
-    elif srg_type == "binary":
-        srg_i = create_binary_tree_srg(size_param, 0.3)
-    elif srg_type == "complete":
-        srg_i = create_complete_graph_srg(size_param, max(1, size_param // 10))
-    elif srg_type == "chain":
-        srg_i = create_chain_srg(size_param)
+    elif ssg_type == "binary":
+        ssg_i = create_binary_tree_ssg(size_param, 0.3)
+    elif ssg_type == "complete":
+        ssg_i = create_complete_graph_ssg(size_param, max(1, size_param // 10))
+    elif ssg_type == "chain":
+        ssg_i = create_chain_ssg(size_param)
     else:
-        srg_i = create_empty_srg(size_param)
+        ssg_i = create_empty_ssg(size_param)
 
     start_v1 = time.perf_counter()
-    smg_v1 = srg_to_smgspec(srg_i, version1=True)
+    smg_v1 = ssg_to_smgspec(ssg_i, version1=True)
     trans_v1_time = time.perf_counter() - start_v1
-    save_smg_file(smg_v1, f"srg_{i + 1}_v1.smg", use_global_path=use_global_path, force=True)
+    save_smg_file(smg_v1, f"ssg_{i + 1}_v1.smg", use_global_path=use_global_path, force=True)
     start_v1_prop = time.perf_counter()
-    check_target_reachability(f"srg_{i + 1}_v1.smg", print_probabilities=False, use_global_path=use_global_path)
+    check_target_reachability(f"ssg_{i + 1}_v1.smg", print_probabilities=False, use_global_path=use_global_path)
     prop_v1_time = time.perf_counter() - start_v1_prop
-    vert_v1, trans_v1, build_time1 = check_smg_stats(f"srg_{i + 1}_v1.smg", use_global_path=use_global_path)
+    vert_v1, trans_v1, build_time1 = check_smg_stats(f"ssg_{i + 1}_v1.smg", use_global_path=use_global_path)
 
     start_v2 = time.perf_counter()
-    smg_v2 = srg_to_smgspec(srg_i, version1=False)
+    smg_v2 = ssg_to_smgspec(ssg_i, version1=False)
     trans_v2_time = time.perf_counter() - start_v2
-    save_smg_file(smg_v2, f"srg_{i + 1}_v2.smg", use_global_path=use_global_path, force=True)
+    save_smg_file(smg_v2, f"ssg_{i + 1}_v2.smg", use_global_path=use_global_path, force=True)
     start_v2_prop = time.perf_counter()
-    check_target_reachability(f"srg_{i + 1}_v2.smg", print_probabilities=False, use_global_path=use_global_path)
+    check_target_reachability(f"ssg_{i + 1}_v2.smg", print_probabilities=False, use_global_path=use_global_path)
     prop_v2_time = time.perf_counter() - start_v2_prop
-    vert_v2, trans_v2, build_time2 = check_smg_stats(f"srg_{i + 1}_v2.smg", use_global_path=use_global_path)
+    vert_v2, trans_v2, build_time2 = check_smg_stats(f"ssg_{i + 1}_v2.smg", use_global_path=use_global_path)
 
     if use_global_path:
-        smg_v1_path = os.path.join(GLOBAL_IN_OUT_PATH, f"srg_{i + 1}_v1.smg")
-        smg_v2_path = os.path.join(GLOBAL_IN_OUT_PATH, f"srg_{i + 1}_v2.smg")
+        smg_v1_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v1.smg")
+        smg_v2_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v2.smg")
     else:
-        smg_v1_path = f"srg_{i + 1}_v1.smg"
-        smg_v2_path = f"srg_{i + 1}_v2.smg"
+        smg_v1_path = f"ssg_{i + 1}_v1.smg"
+        smg_v2_path = f"ssg_{i + 1}_v2.smg"
     if trans_v1_time == 0.0 or trans_v2_time == 0.0 or prop_v1_time == 0.0 or prop_v2_time == 0.0:
-        print_error(f"Error: Transformation or property checking time is 0.0 for SRG {i + 1}.")
+        print_error(f"Error: Transformation or property checking time is 0.0 for SSG {i + 1}.")
 
     return trans_v1_time, trans_v2_time, prop_v1_time, prop_v2_time, vert_v1, vert_v2, trans_v1, trans_v2, smg_v1_path, smg_v2_path, size_param
 
 
-def benchmark_exponential_srgs(srg_type: str, time_per_iteration: int = 120, save_results: bool = None, result_path: str = None, use_global_path: bool = True, force: bool = True, debug: bool = GLOBAL_DEBUG) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]:
+def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 120, save_results: bool = None, result_path: str = None, use_global_path: bool = True, force: bool = True, debug: bool = GLOBAL_DEBUG) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]:
     """
-        Benchmark the creation and property checking of multiple SRGs.
-        :param srg_type: Type of SRG to create (random, binary, empty)
-        :type srg_type: str
+        Benchmark the creation and property checking of multiple SSGs.
+        :param ssg_type: Type of SSG to create (random, binary, empty)
+        :type ssg_type: str
         :param time_per_iteration: Time in seconds for each iteration
         :type time_per_iteration: int
         :param save_results: Whether to write the benchmark results to a file
@@ -526,7 +526,7 @@ def benchmark_exponential_srgs(srg_type: str, time_per_iteration: int = 120, sav
         :type result_path: str
         :param use_global_path: Whether to use the global path for the SMG file
         :type use_global_path: bool
-        :param force: Whether to force the creation of the SRG
+        :param force: Whether to force the creation of the SSG
         :type force: bool
         :param debug: Whether to print debug information
         :type debug: bool
@@ -543,33 +543,33 @@ def benchmark_exponential_srgs(srg_type: str, time_per_iteration: int = 120, sav
     all_v1_transitions = []
     all_v2_transitions = []
     if result_path is None:
-        result_path = f"benchmark_results_exponential_{srg_type}_max_{time_per_iteration}.txt"
+        result_path = f"benchmark_results_exponential_{ssg_type}_max_{time_per_iteration}.txt"
     if use_global_path:
         result_path = os.path.join(GLOBAL_IN_OUT_PATH, result_path)
     if save_results is None:
         save_results = False if not force and os.path.exists(result_path) and os.path.getsize(result_path) > 0 else True
     if debug:
-        match srg_type:
+        match ssg_type:
             case "random":
                 print_debug(
-                    f"Creating random SRGs that grow exponentially until timeout of {time_per_iteration} seconds.")
+                    f"Creating random SSGs that grow exponentially until timeout of {time_per_iteration} seconds.")
             case "random_no_additional_selfloops":
                 print_debug(
-                    f"Creating random SRGs without additional self-loops that grow exponentially until timeout of {time_per_iteration} seconds.")
+                    f"Creating random SSGs without additional self-loops that grow exponentially until timeout of {time_per_iteration} seconds.")
             case "binary":
                 print_debug(
-                    f"Creating binary tree SRGs that grow exponentially until timeout of {time_per_iteration} seconds.")
+                    f"Creating binary tree SSGs that grow exponentially until timeout of {time_per_iteration} seconds.")
             case "complete":
                 print_debug(
-                    f"Creating complete graph SRGs that grow exponentially until timeout of {time_per_iteration} seconds.")
+                    f"Creating complete graph SSGs that grow exponentially until timeout of {time_per_iteration} seconds.")
             case "chain":
-                print_debug(f"Creating chain SRGs that grow exponentially until timeout of {time_per_iteration} seconds.")
+                print_debug(f"Creating chain SSGs that grow exponentially until timeout of {time_per_iteration} seconds.")
             case _:
-                print_debug(f"Creating empty SRGs that grow exponentially until timeout of {time_per_iteration} seconds.")
+                print_debug(f"Creating empty SSGs that grow exponentially until timeout of {time_per_iteration} seconds.")
     i = 0
     while True:
         q = Queue()
-        p = Process(target=_iteration_worker, args=(q, srg_type, i, use_global_path))
+        p = Process(target=_iteration_worker, args=(q, ssg_type, i, use_global_path))
         start_time = time.perf_counter()
         p.start()
         p.join(timeout=time_per_iteration)
@@ -577,16 +577,16 @@ def benchmark_exponential_srgs(srg_type: str, time_per_iteration: int = 120, sav
 
         if p.is_alive():
             if debug:
-                print_debug(f"Timeout of {time_per_iteration} seconds reached for SRG {i + 1}.")
+                print_debug(f"Timeout of {time_per_iteration} seconds reached for SSG {i + 1}.")
             p.terminate()
             p.join()
             try:
                 if use_global_path:
-                    smg_v1_path = os.path.join(GLOBAL_IN_OUT_PATH, f"srg_{i + 1}_v1.smg")
-                    smg_v2_path = os.path.join(GLOBAL_IN_OUT_PATH, f"srg_{i + 1}_v2.smg")
+                    smg_v1_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v1.smg")
+                    smg_v2_path = os.path.join(GLOBAL_IN_OUT_PATH, f"ssg_{i + 1}_v2.smg")
                 else:
-                    smg_v1_path = f"srg_{i + 1}_v1.smg"
-                    smg_v2_path = f"srg_{i + 1}_v2.smg"
+                    smg_v1_path = f"ssg_{i + 1}_v1.smg"
+                    smg_v2_path = f"ssg_{i + 1}_v2.smg"
                 os.remove(smg_v1_path)
                 os.remove(smg_v2_path)
             except FileNotFoundError:
@@ -595,7 +595,7 @@ def benchmark_exponential_srgs(srg_type: str, time_per_iteration: int = 120, sav
         try:
             result = q.get_nowait()
         except pyqueue.Empty:
-            print_error(f"Error: No result received from subprocess for SRG {i + 1}.")
+            print_error(f"Error: No result received from subprocess for SSG {i + 1}.")
             break
 
         if isinstance(result, Exception):
@@ -607,12 +607,12 @@ def benchmark_exponential_srgs(srg_type: str, time_per_iteration: int = 120, sav
          smg_v1_path, smg_v2_path, size_param) = result
 
         if vert_v1 < 0 or vert_v2 < 0 or trans_v1 < 0 or trans_v2 < 0:
-            print_error(f"Error: Negative values for vertices or transitions in SRG {i + 1}.")
+            print_error(f"Error: Negative values for vertices or transitions in SSG {i + 1}.")
             break
 
         if debug:
-            print_debug(f"SRG {i + 1} with size parameter {size_param} successfully completed in {end_time-start_time:.2f} seconds.")
-            print_debug(f"Preparing SRG {i + 2}.")
+            print_debug(f"SSG {i + 1} with size parameter {size_param} successfully completed in {end_time-start_time:.2f} seconds.")
+            print_debug(f"Preparing SSG {i + 2}.")
 
         # Remove temporary .smg files
         try:
@@ -632,7 +632,7 @@ def benchmark_exponential_srgs(srg_type: str, time_per_iteration: int = 120, sav
         all_v2_transitions.append(trans_v2)
 
         i += 1
-    if srg_type == "binary":
+    if ssg_type == "binary":
         size_param = i + 2
     else:
         size_param = (2 ** (i + 1))
@@ -645,11 +645,11 @@ def benchmark_exponential_srgs(srg_type: str, time_per_iteration: int = 120, sav
         output += str(all_v2_vertices) + "\n"
         output += str(all_v1_transitions) + "\n"
         output += str(all_v2_transitions) + "\n"
-        output += f"[ex, {srg_type}, {size_param}, {time_per_iteration}]" + "\n"
+        output += f"[ex, {ssg_type}, {size_param}, {time_per_iteration}]" + "\n"
         with open(result_path, "w") as f:
             f.write(output)
 
-    return all_v1_trans_times, all_v2_trans_times, all_v1_prop_times, all_v2_prop_times, all_v1_vertices, all_v2_vertices, all_v1_transitions, all_v2_transitions, ("ex", srg_type, size_param, time_per_iteration)
+    return all_v1_trans_times, all_v2_trans_times, all_v1_prop_times, all_v2_prop_times, all_v1_vertices, all_v2_vertices, all_v1_transitions, all_v2_transitions, ("ex", ssg_type, size_param, time_per_iteration)
 
 
 def read_benchmark_results(file_path: str, use_global_path: bool = True) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]:
@@ -917,11 +917,11 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
         all_v1_t = np.concatenate((all_v1_t, data[i][0][6]))
         all_v2_t = np.concatenate((all_v2_t, data[i][0][7]))
 
-    srg_type = []
+    ssg_type = []
     for benchmark_index in range(len(benchmarks_results)):
         for i in range(len(benchmarks_results[benchmark_index][0])):
-            srg_type.append(benchmarks_results[benchmark_index][8][1])
-    srg_type_array = np.array(srg_type)
+            ssg_type.append(benchmarks_results[benchmark_index][8][1])
+    ssg_type_array = np.array(ssg_type)
 
     colors = {"random": 'red', "random_no_additional_selfloops": 'orange', "binary": 'green', "complete": 'blue', "chain": 'purple', "empty": 'gray'}
     labels = {"random": 'Random', "random_no_additional_selfloops": 'Random (No Additional Self-Loops)', "binary": 'Binary Tree', "complete": 'Complete Graph', "chain": 'Chain', "empty": 'Empty'}
@@ -985,9 +985,9 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
     # --- Plot 1: Transformation Time ---
     axs[0].set_xscale('log')
     axs[0].set_yscale('log')
-    for srg_type in np.unique(srg_type_array):
-        mask = srg_type_array == srg_type
-        axs[0].scatter(all_v1_tt[mask], all_v2_tt[mask], color=colors[srg_type], label=labels[srg_type])
+    for ssg_type in np.unique(ssg_type_array):
+        mask = ssg_type_array == ssg_type
+        axs[0].scatter(all_v1_tt[mask], all_v2_tt[mask], color=colors[ssg_type], label=labels[ssg_type])
     axs[0].plot(all_v1_tt, all_v1_tt, linestyle='-', color='black', label='v1 and v2 equal')
     axs[0].plot(all_v1_tt, 2 * all_v1_tt, linestyle='--', color='#808080')
     axs[0].plot(all_v1_tt, 0.5 * all_v1_tt, linestyle='--', color='#808080')
@@ -1000,9 +1000,9 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
     # --- Plot 2: Property Checking Time ---
     axs[1].set_xscale('log')
     axs[1].set_yscale('log')
-    for srg_type in np.unique(srg_type_array):
-        mask = srg_type_array == srg_type
-        axs[1].scatter(all_v1_pt[mask], all_v2_pt[mask], color=colors[srg_type], label=labels[srg_type])
+    for ssg_type in np.unique(ssg_type_array):
+        mask = ssg_type_array == ssg_type
+        axs[1].scatter(all_v1_pt[mask], all_v2_pt[mask], color=colors[ssg_type], label=labels[ssg_type])
     axs[1].plot(all_v1_pt, all_v1_pt, linestyle='-', color='black', label='v1 and v2 equal')
     axs[1].plot(all_v1_pt, 2 * all_v1_pt, linestyle='--', color='#808080')
     axs[1].plot(all_v1_pt, 0.5 * all_v1_pt, linestyle='--', color='#808080')
@@ -1038,9 +1038,9 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
 
     axs[0].set_xscale('log')
     axs[0].set_yscale('log')
-    for srg_type in np.unique(srg_type_array):
-        mask = srg_type_array == srg_type
-        axs[0].scatter(all_v1_v[mask], all_v2_v[mask], color=colors[srg_type], label=labels[srg_type])
+    for ssg_type in np.unique(ssg_type_array):
+        mask = ssg_type_array == ssg_type
+        axs[0].scatter(all_v1_v[mask], all_v2_v[mask], color=colors[ssg_type], label=labels[ssg_type])
     axs[0].plot(all_v1_v, all_v1_v, linestyle='-', color='black', label='#v with v1 = #v with v2')
     axs[0].plot(all_v1_v, 2 * all_v1_v, linestyle='--', color='#808080')
     axs[0].plot(all_v1_v, 0.5 * all_v1_v, linestyle='--', color='#808080')
@@ -1053,9 +1053,9 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
     # Plot: Transitions
     axs[1].set_xscale('log')
     axs[1].set_yscale('log')
-    for srg_type in np.unique(srg_type_array):
-        mask = srg_type_array == srg_type
-        axs[1].scatter(all_v1_t[mask], all_v2_t[mask], color=colors[srg_type], label=labels[srg_type])
+    for ssg_type in np.unique(ssg_type_array):
+        mask = ssg_type_array == ssg_type
+        axs[1].scatter(all_v1_t[mask], all_v2_t[mask], color=colors[ssg_type], label=labels[ssg_type])
     axs[1].plot(all_v1_t, all_v1_t, linestyle='-', color='black', label='#t with v1 = #t with v2')
     axs[1].plot(all_v1_t, 2 * all_v1_t, linestyle='--', color='#808080')
     axs[1].plot(all_v1_t, 0.5 * all_v1_t, linestyle='--', color='#808080')
@@ -1089,12 +1089,12 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
 
 
 def main():
-    list_of_benchmark_results = [(benchmark_exponential_srgs(srg_type="random", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True))]
-    list_of_benchmark_results.append((benchmark_exponential_srgs(srg_type="random_no_additional_selfloops", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_srgs(srg_type="binary", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_srgs(srg_type="complete", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_srgs(srg_type="chain", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_srgs(srg_type="empty", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results = [(benchmark_exponential_ssgs(ssg_type="random", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True))]
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="random_no_additional_selfloops", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="binary", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="complete", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="chain", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="empty", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
     plot_combined_benchmark_results(list_of_benchmark_results, show_times=True, show_stats=True, plot_name="test_benchmark_exponential_combined", save_plots=True, use_global_path=True)
 
 
@@ -1109,6 +1109,6 @@ if __name__ == '__main__':
 
 # plot_combined_benchmark_results([([1.0], [0.5], [0.5], [1.0], [10], [20], [20], [10], ("ex", "random", 1, 1)), ([1.0, 5.0], [2.0, 10.0], [10.0, 50.0], [20.0, 100.0], [10.0, 20.0], [20.0, 40.0], [100.0, 200.0], [200.0, 400.0], ("normal", "empty", 1, 1))], show_times=False, show_stats=False, plot_name="test_combined_plot", save_plots=True, use_global_path=True)
 
-# benchmark_multiple_srgs(3, "random", 10, True, use_global_path=True, force=True, debug=True)
+# benchmark_multiple_ssgs(3, "random", 10, True, use_global_path=True, force=True, debug=True)
 # lis = read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\PRISMgames_testing\\program_in_and_out\\benchmark_results_normal_3_random_10.txt", use_global_path=True)
 # plot_combined_benchmark_results([lis], show_times=True, show_stats=True, plot_name="test_combined_plot", save_plots=True, use_global_path=True)
