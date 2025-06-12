@@ -1,6 +1,7 @@
 import re
 import os
 import time
+
 from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_WINDOWS, PRINT_VERTEX_CREATION_WARNINGS, GLOBAL_IN_OUT_PATH
 from error_handling import print_warning, print_error, print_debug, is_float_expr, float_or_fraction
 
@@ -9,7 +10,7 @@ class SpgVertex:
 
     def __init__(self, name: str, is_eve: bool, priority: int):
         """
-        Creates a vertex of a simple parity game.
+        Creates a vertex of a stochastic parity game.
         :param name: Name of the vertex
         :type name: str
         :param is_eve: True if the vertex is controlled by Eve, False if it is controlled by Adam
@@ -36,7 +37,7 @@ class SpgVertex:
 class SpgTransition:
     def __init__(self, start_vertex: SpgVertex, end_vertices: set[tuple[float, SpgVertex]], action: str):
         """
-        Creates a transition of a simple parity game.
+        Creates a transition of a stochastic parity game.
         :param start_vertex: Starting vertex of the transition
         :type start_vertex: SpgVertex
         :param end_vertices: Set of tuples of probabilities and respective end vertices
@@ -72,15 +73,15 @@ class SpgTransition:
         return output
 
 
-class SimpleParityGame:
+class StochasticParityGame:
     def __init__(self, vertices: dict[str, SpgVertex], transitions: dict[tuple[SpgVertex, str], SpgTransition], init_vertex: SpgVertex):
         """
-        Creates a simple parity game and checks for deadlock vertices and vertices without ingoing transitions.
-        :param vertices: Vertices of the simple parity game
+        Creates a stochastic parity game and checks for deadlock vertices and vertices without ingoing transitions.
+        :param vertices: Vertices of the stochastic parity game
         :type vertices: dict[str, SpgVertex]
-        :param transitions: Transitions of the simple parity game
+        :param transitions: Transitions of the stochastic parity game
         :type transitions: dict[(SpgVertex, str), SpgTransition]
-        :param init_vertex: Initial vertex of the simple parity game
+        :param init_vertex: Initial vertex of the stochastic parity game
         :type init_vertex: SpgVertex
         """
         self.vertices = vertices
@@ -101,7 +102,7 @@ def has_ingoing_transition(vertex: SpgVertex, transitions: dict[tuple[SpgVertex,
     Checks if the given vertex has an ingoing transition.
     :param vertex: Vertex to check
     :type vertex: SpgVertex
-    :param transitions: Transitions of the simple parity game
+    :param transitions: Transitions of the stochastic parity game
     :type transitions: dict[(SpgVertex, str), SpgTransition]
     :return: True if the vertex has an ingoing transition, False otherwise
     :rtype: bool
@@ -118,7 +119,7 @@ def is_deadlock_vertex(vertex: SpgVertex, transitions: dict[tuple[SpgVertex, str
     Checks if a vertex is a deadlock vertex.
     :param vertex: Vertex to check
     :type vertex: SpgVertex
-    :param transitions: Transitions of the simple parity game
+    :param transitions: Transitions of the stochastic parity game
     :type transitions: dict[(SpgVertex, str), SpgTransition]
     :return: True if the vertex is a deadlock vertex, False otherwise
     :rtype: bool
@@ -129,17 +130,17 @@ def is_deadlock_vertex(vertex: SpgVertex, transitions: dict[tuple[SpgVertex, str
     return True
 
 
-def read_spg_from_file(file_name: str, use_global_path: bool = False, debug: bool = GLOBAL_DEBUG) -> SimpleParityGame:
+def read_spg_from_file(file_name: str, use_global_path: bool = False, debug: bool = GLOBAL_DEBUG) -> StochasticParityGame:
     """
-    Reads a simple parity game from a file and returns the corresponding SimpleParityGame object.
+    Reads a stochastic parity game from a file and returns the corresponding StochasticParityGame object.
     :param file_name: Path to the file that is joined with the global_in_out_path
     :type file_name: str
     :param use_global_path: If True, the file_name is joined with the global_in_out_path
     :type use_global_path: bool
     :param debug: True if debug information should be printed
     :type debug: bool
-    :return: SimpleParityGame object
-    :rtype: SimpleParityGame
+    :return: StochasticParityGame object
+    :rtype: StochasticParityGame
     """
     if debug:
         start_time = time.perf_counter()
@@ -289,14 +290,14 @@ def read_spg_from_file(file_name: str, use_global_path: bool = False, debug: boo
                 print_error("Undefined state")
     if debug:
         print_debug(f"SPG file {file_name} read in {(time.perf_counter() - start_time):.6f} seconds")
-    return SimpleParityGame(spg_vertices, spg_transitions, spg_initial_vertex)
+    return StochasticParityGame(spg_vertices, spg_transitions, spg_initial_vertex)
 
 
-def spg_to_spgspec(spg: SimpleParityGame, debug: bool = GLOBAL_DEBUG) -> str:
+def spg_to_spgspec(spg: StochasticParityGame, debug: bool = GLOBAL_DEBUG) -> str:
     """
-    Converts a SimpleParityGame object to a string representation in the spg specification format.
-    :param spg: The SimpleParityGame object to convert
-    :type spg: SimpleParityGame
+    Converts a StochasticParityGame object to a string representation in the spg specification format.
+    :param spg: The StochasticParityGame object to convert
+    :type spg: StochasticParityGame
     :param debug: True if debug information should be printed
     :type debug: bool
     :return: SPG specification string
@@ -366,15 +367,13 @@ def save_spg_file(spg_spec: str, file_name: str = "", use_global_path: bool = Fa
         print_debug(f"SPG file {file_name} created in {(time.perf_counter() - start_time):.6f} seconds")
 
 
-def reformat_spgspec(file_name: str, use_global_path: bool = False, force: bool = False, debug: bool = GLOBAL_DEBUG):
+def reformat_spgspec(file_name: str, use_global_path: bool = False, debug: bool = GLOBAL_DEBUG):
     """
     Reformats the given SPG specification file to the default format.
     :param file_name: Name of the file to reformat
     :type file_name: str
     :param use_global_path: True if the file_name should be joined with the global_in_out_path
     :type use_global_path: bool
-    :param force: True if the file should be overwritten if it already exists
-    :type force: bool
     :param debug: True if debug information should be printed
     :type debug: bool
     """
@@ -384,6 +383,6 @@ def reformat_spgspec(file_name: str, use_global_path: bool = False, force: bool 
         file_name = os.path.join(GLOBAL_IN_OUT_PATH_WINDOWS, file_name)
     spg = read_spg_from_file(file_name=file_name, use_global_path=use_global_path, debug=False)
     content = spg_to_spgspec(spg)
-    save_spg_file(spg_spec=content, file_name=file_name, use_global_path=use_global_path, force=force, debug=False)
+    save_spg_file(spg_spec=content, file_name=file_name, use_global_path=use_global_path, force=True, debug=False)
     if debug:
         print_debug(f"SPG file {file_name} reformatted in {(time.perf_counter() - start_time):.6f} seconds")

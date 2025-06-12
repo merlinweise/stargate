@@ -1,16 +1,16 @@
 from fractions import Fraction
 from math import factorial
 
-from src.simpleparitygame import SimpleParityGame, read_spg_from_file
-from src.simplestochasticgame import SimpleStochasticGame, SsgVertex, SsgTransition
+from src.stochasticparitygame import StochasticParityGame, read_spg_from_file
+from src.stochasticreachgame import StochasticReachGame, SrgVertex, SrgTransition
 
 
-def max_denom_and_min_prob(spg: SimpleParityGame, max_d: int=10_000) -> (float, int):
+def max_denom_and_min_prob(spg: StochasticParityGame, max_d: int=10_000) -> (float, int):
     """
-    Computes the minimum probability and the maximum denominator of the transition probabilities in a SimpleParityGame.
-    This is used to compute the alphas for the conversion to a SimpleStochasticGame.
-    :param spg: The SimpleParityGame to analyze
-    :type spg: SimpleParityGame
+    Computes the minimum probability and the maximum denominator of the transition probabilities in a StochasticParityGame.
+    This is used to compute the alphas for the conversion to a StochasticReachGame.
+    :param spg: The StochasticParityGame to analyze
+    :type spg: StochasticParityGame
     :param max_d: The maximum denominator to consider for the fractions, defaults to 10_000
     :type max_d: int
     :return: minimum probability and maximum denominator
@@ -23,7 +23,7 @@ def max_denom_and_min_prob(spg: SimpleParityGame, max_d: int=10_000) -> (float, 
     fractions = [Fraction(f).limit_denominator(max_d) for f in floats]
     return (min(floats), max(fr.denominator for fr in fractions))
 
-def compute_alphas_for_spg(spg: SimpleParityGame, epsilon: float = None, max_d: int = 10_000):
+def compute_alphas_for_spg(spg: StochasticParityGame, epsilon: float = None, max_d: int = 10_000):
 
     delta_min_float, max_denominator_M = max_denom_and_min_prob(spg, max_d)
     n_states = len(spg.vertices)
@@ -55,59 +55,59 @@ def compute_alphas_for_spg(spg: SimpleParityGame, epsilon: float = None, max_d: 
     return alphas
 
 
-def spg_to_ssg(spg: SimpleParityGame, epsilon: float = None, print_alphas: bool = False) -> SimpleStochasticGame:
+def spg_to_srg(spg: StochasticParityGame, epsilon: float = None, print_alphas: bool = False) -> StochasticReachGame:
     """
-    Converts a SimpleParityGame to a SimpleStochasticGame.
-    :param spg: The SimpleParityGame to convert
-    :type spg: SimpleParityGame
+    Converts a StochasticParityGame to a StochasticReachGame.
+    :param spg: The StochasticParityGame to convert
+    :type spg: StochasticParityGame
     :param epsilon: The epsilon value for the conversion, if None, it will be computed based on the game
     :type epsilon: float, optional
     :param print_alphas: Whether to print the computed alphas, defaults to False
     :type print_alphas: bool, optional
-    :return: The converted SimpleStochasticGame
-    :rtype: SimpleStochasticGame
+    :return: The converted StochasticReachGame
+    :rtype: StochasticReachGame
     """
     alphas = compute_alphas_for_spg(spg, epsilon=epsilon)
     if print_alphas:
         print("Computed alphas:")
         for k, v in alphas.items():
             print(f"Priority {k}: {v}")
-    vertices: dict[str, SsgVertex] = dict()
-    transitions: dict[tuple[SsgVertex, str], SsgTransition] = dict()
-    respective_spg_ssg_vertixes: dict[SpgVertex, SsgVertex] = dict()
-    initial_vertex: SsgVertex = None
+    vertices: dict[str, SrgVertex] = dict()
+    transitions: dict[tuple[SrgVertex, str], SrgTransition] = dict()
+    respective_spg_srg_vertixes: dict[SpgVertex, SrgVertex] = dict()
+    initial_vertex: SrgVertex = None
 
     for v in spg.vertices.values():
-        vertices[v.name] = SsgVertex(name=v.name, is_eve=v.is_eve, is_target=False)
-        respective_spg_ssg_vertixes[v] = vertices[v.name]
-    new_vertices: dict[str, SsgVertex] = dict()
+        vertices[v.name] = SrgVertex(name=v.name, is_eve=v.is_eve, is_target=False)
+        respective_spg_srg_vertixes[v] = vertices[v.name]
+    new_vertices: dict[str, SrgVertex] = dict()
     initial_vertex = vertices[spg.init_vertex.name]
-    respective_intermediate_vertices: dict[SsgVertex, SsgVertex] = dict()
+    respective_intermediate_vertices: dict[SrgVertex, SrgVertex] = dict()
     for v in spg.vertices.values():
         if not vertices.keys().__contains__(v.name+"\'"):
-            new_vertices[v.name+"\'"] = SsgVertex(name=v.name+"\'", is_eve=v.is_eve, is_target=False)
+            new_vertices[v.name+"\'"] = SrgVertex(name=v.name + "\'", is_eve=v.is_eve, is_target=False)
             respective_intermediate_vertices[vertices[v.name]] = new_vertices[v.name+"\'"]
         else:
             i = 0
             while vertices.keys().__contains__(v.name+"\'"+str(i)):
                 i += 1
-            new_vertices[v.name+"\'"+str(i)] = SsgVertex(name=v.name+"\'"+str(i), is_eve=v.is_eve, is_target=False)
+            new_vertices[v.name+"\'"+str(i)] = SrgVertex(name=v.name + "\'" + str(i), is_eve=v.is_eve, is_target=False)
             respective_intermediate_vertices[vertices[v.name]] = new_vertices[v.name+"\'"+str(i)]
     vertices |= new_vertices
     if not vertices.keys().__contains__("v_win"):
-        vertices["v_win"] = SsgVertex(name="v_win", is_eve=True, is_target=True)
+        vertices["v_win"] = SrgVertex(name="v_win", is_eve=True, is_target=True)
     else:
         i=0
         while vertices.keys().__contains__("v_win"+str(i)):
             i += 1
-        vertices["v_win"+str(i)] = SsgVertex(name="v_win"+str(i), is_eve=True, is_target=True)
+        vertices["v_win"+str(i)] = SrgVertex(name="v_win" + str(i), is_eve=True, is_target=True)
     if not vertices.keys().__contains__("v_lose"):
-        vertices["v_lose"] = SsgVertex(name="v_lose", is_eve=False, is_target=False)
+        vertices["v_lose"] = SrgVertex(name="v_lose", is_eve=False, is_target=False)
     else:
         i=0
         while vertices.keys().__contains__("v_lose"+str(i)):
             i += 1
-        vertices["v_lose"+str(i)] = SsgVertex(name="v_lose"+str(i), is_eve=False, is_target=False)
+        vertices["v_lose"+str(i)] = SrgVertex(name="v_lose" + str(i), is_eve=False, is_target=False)
 
     for transition in spg.transitions.values():
         start_v = vertices[transition.start_vertex.name]
@@ -115,21 +115,21 @@ def spg_to_ssg(spg: SimpleParityGame, epsilon: float = None, print_alphas: bool 
         end_vs = set()
         for prob, end_v in transition.end_vertices:
             end_vs.add((prob, respective_intermediate_vertices[vertices[end_v.name]]))
-        transitions[(start_v, action)] = SsgTransition(start_v, end_vs, action)
+        transitions[(start_v, action)] = SrgTransition(start_v, end_vs, action)
 
     for vertex in spg.vertices.values():
         if vertex.priority % 2 == 0:
-            transitions[(respective_intermediate_vertices[respective_spg_ssg_vertixes[vertex]], "alpha")] = SsgTransition(respective_intermediate_vertices[respective_spg_ssg_vertixes[vertex]], {(alphas[vertex.priority], vertices["v_win"]), (1-alphas[vertex.priority], vertices[respective_spg_ssg_vertixes[vertex].name])}, "alpha")
+            transitions[(respective_intermediate_vertices[respective_spg_srg_vertixes[vertex]], "alpha")] = SrgTransition(respective_intermediate_vertices[respective_spg_srg_vertixes[vertex]], {(alphas[vertex.priority], vertices["v_win"]), (1 - alphas[vertex.priority], vertices[respective_spg_srg_vertixes[vertex].name])}, "alpha")
         else:
-            transitions[(respective_intermediate_vertices[respective_spg_ssg_vertixes[vertex]], "alpha")] = SsgTransition(respective_intermediate_vertices[respective_spg_ssg_vertixes[vertex]], {(alphas[vertex.priority], vertices["v_lose"]), (1-alphas[vertex.priority], vertices[respective_spg_ssg_vertixes[vertex].name])}, "alpha")
-    return SimpleStochasticGame(vertices, transitions, initial_vertex)
+            transitions[(respective_intermediate_vertices[respective_spg_srg_vertixes[vertex]], "alpha")] = SrgTransition(respective_intermediate_vertices[respective_spg_srg_vertixes[vertex]], {(alphas[vertex.priority], vertices["v_lose"]), (1 - alphas[vertex.priority], vertices[respective_spg_srg_vertixes[vertex].name])}, "alpha")
+    return StochasticReachGame(vertices, transitions, initial_vertex)
 
 
 
 spg = read_spg_from_file("raphael3.spg", use_global_path=True)
-ssg = spg_to_ssg(spg, epsilon=1e-6 , print_alphas=True)
-from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability, create_dot_file, create_png_file
-smgspec = ssg_to_smgspec(ssg, version1=True, print_correspondingvertices=True)
+srg = spg_to_srg(spg, epsilon=1e-6, print_alphas=True)
+from srg_to_smg import srg_to_smgspec, save_smg_file, check_target_reachability, create_dot_file, create_png_file
+smgspec = srg_to_smgspec(srg, version1=True, print_correspondingvertices=True)
 save_smg_file(smgspec, "raphael3.smg", use_global_path=True, force=True)
 # create_dot_file("raphael3.smg", use_global_path=True, debug=True, force=True)
 # create_png_file("raphael3.dot", use_global_path=True, force=True)

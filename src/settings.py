@@ -1,14 +1,14 @@
 import os
 import subprocess
-
 from pathlib import PureWindowsPath
+
 from error_handling import print_error
 
 GLOBAL_IN_OUT_PATH_LINUX = ""  # only assign if the OS is Linux, otherwise it will be set to GLOBAL_IN_OUT_PATH_WINDOWS
 GLOBAL_IN_OUT_PATH_WINDOWS = "C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\PRISMgames_testing\\program_in_and_out"  # only assign if the OS is Windows, otherwise it will be set to GLOBAL_IN_OUT_PATH_LINUX
 GLOBAL_DEBUG = False  # If True, prints debug information, default is False
 PRINT_VERTEX_CREATION_WARNINGS = False  # If True, prints warnings about deadlock vertices and vertices with no outgoing transitions, default is False
-ENSURE_EVE_AND_ADAM_VERTICES = True  # If True, ensures that every SSG and SPG has at least one Eve and one Adam vertex, if False, the algorithm will not ensure this, default is True
+ENSURE_EVE_AND_ADAM_VERTICES = True  # If True, ensures that every SRG and SPG has at least one Eve and one Adam vertex, if False, the algorithm will not ensure this, default is True
 PRISM_EPSILON = 1e-6  # Epsilon for PRISM, used for numerical stability in value iteration algorithms, default is 1e-6
 MAX_ITERS = 10000  # Maximum number of iterations for PRISM algorithms, default is 10000
 PRISM_PATH = "/mnt/c/Uni_Zeug/6.Semester/Bachelorarbeit/prism_extension/Algorithms-For-Stochastic-Games/prism-games-3.0.beta-src/prism/bin/prism"  # Path to the PRISM executable, needs to be in Linux format
