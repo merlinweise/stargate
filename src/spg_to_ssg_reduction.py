@@ -43,7 +43,7 @@ def compute_alphas_for_spg(spg: StochasticParityGame, epsilon: float = None, max
             gap = next_k - prev_k
             alphas[next_k] = alphas[prev_k] * (ratio_bound ** gap)
     else:
-        numerator = 4 * epsilon * delta_min ** n_states
+        numerator = Fraction(4) * Fraction(epsilon) * delta_min ** n_states
         denominator = (4 - epsilon) * delta_min
         alpha0 = float(numerator / denominator)
 
@@ -126,11 +126,11 @@ def spg_to_ssg(spg: StochasticParityGame, epsilon: float = None, print_alphas: b
 
 
 
-spg = read_spg_from_file("raphael3.spg", use_global_path=True)
+"""spg = read_spg_from_file("raphael3.spg", use_global_path=True)
 ssg = spg_to_ssg(spg, epsilon=1e-6, print_alphas=True)
 from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability, create_dot_file, create_png_file
 smgspec = ssg_to_smgspec(ssg, version1=True, print_correspondingvertices=True)
 save_smg_file(smgspec, "raphael3.smg", use_global_path=True, force=True)
 # create_dot_file("raphael3.smg", use_global_path=True, debug=True, force=True)
 # create_png_file("raphael3.dot", use_global_path=True, force=True)
-check_target_reachability("raphael3.smg", use_global_path=True, print_probabilities=True, debug=False)
+check_target_reachability("raphael3.smg", use_global_path=True, print_probabilities=True, debug=False)"""

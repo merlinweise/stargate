@@ -1,8 +1,13 @@
 # Imports
 import random
+import os
 
-from stochasticparitygame import SpgVertex, SpgTransition, StochasticParityGame
+from src.ssg_to_smg import check_target_reachability
+from stochasticparitygame import SpgVertex, SpgTransition, StochasticParityGame, read_spg_from_file
 from error_handling import print_error
+from spg_to_ssg_reduction import spg_to_ssg
+from ssg_to_smg import ssg_to_smgspec, save_smg_file
+from settings import GLOBAL_DEBUG
 
 
 def create_chain_spg(length: int, min_prob: float) -> StochasticParityGame:
@@ -17,7 +22,7 @@ def create_chain_spg(length: int, min_prob: float) -> StochasticParityGame:
     return StochasticParityGame(vertices=vertices, transitions=transitions, init_vertex=initial_vertex)
 
 
-def create_mutual_exclusion_spg() -> StochasticParityGame:
+def create_mutex_spg() -> StochasticParityGame:
     vertices = {
         "start":    SpgVertex(name="start",     is_eve=True,    priority=0),
         "(N,N,0)":  SpgVertex(name="(N,N,0)",   is_eve=True,    priority=3),
@@ -40,7 +45,7 @@ def create_mutual_exclusion_spg() -> StochasticParityGame:
         "(C,C,1)":  SpgVertex(name="(C,C,1)",   is_eve=False,   priority=1)
     }
     transitions = {
-        (vertices["start"], "enter"):   SpgTransition(start_vertex=vertices["start"], end_vertices={(0.5, vertices["(N,N,0)"]), (0.5, vertices["(N,N,1)"])}, action="enter"),
+        (vertices["start"], "start"):   SpgTransition(start_vertex=vertices["start"], end_vertices={(0.5, vertices["(N,N,0)"]), (0.5, vertices["(N,N,1)"])}, action="enter"),
         (vertices["(N,N,0)"], "stay"):  SpgTransition(start_vertex=vertices["(N,N,0)"], end_vertices={(0.5, vertices["(N,N,0)"]), (0.5, vertices["(N,N,1)"])}, action="stay"),
         (vertices["(N,N,0)"], "try"):   SpgTransition(start_vertex=vertices["(N,N,0)"], end_vertices={(0.5, vertices["(T,N,0)"]), (0.5, vertices["(T,N,1)"])}, action="try"),
         (vertices["(N,N,1)"], "stay"):  SpgTransition(start_vertex=vertices["(N,N,1)"], end_vertices={(0.5, vertices["(N,N,0)"]), (0.5, vertices["(N,N,1)"])}, action="try"),
@@ -70,7 +75,7 @@ def create_mutual_exclusion_spg() -> StochasticParityGame:
     return StochasticParityGame(vertices=vertices, transitions=transitions, init_vertex=initial_vertex)
 
 
-def create_frozen_lake_spg(columns: int, rows: int, point0: tuple[int, int] | None = None, point1: tuple[int, int] | None = None, share_of_holes: float = 0.5, wind_probability: float = 0.2, slide_probability: float = 0.1) -> StochasticParityGame:
+def create_frozen_lake_spg(columns: int, rows: int, point0: tuple[int, int] | None = None, point1: tuple[int, int] | None = None, share_of_holes: float = 0.5, wind_probability: float = 0.5, slide_probability: float = 0.5) -> StochasticParityGame:
     field = [[2 for _ in range(rows)] for _ in range(columns)]
     if point0 is not None and point1 is not None:
         if point0 == point1:
@@ -165,8 +170,14 @@ def create_frozen_lake_spg(columns: int, rows: int, point0: tuple[int, int] | No
                             case (2, None):
                                 transitions[(vertices[f"v_{x}_{y}_0_1"], direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_0_1"], end_vertices={(1-wind_probability, vertices[f"v_{x + move[0]}_{y + move[1]}_0_1"]), (wind_probability, vertices[f"v_{x + move[0]}_{y + move[1]}_1_1"])}, action=direction)
                                 transitions[(vertices[f"v_{x}_{y}_1_1"], "blow_" + direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_1_1"], end_vertices={(1.0, vertices[f"v_{x + move[0]}_{y + move[1]}_0_1"])}, action="blow_" + direction)
-                            case (2, _):
+                            case (2, 1):
+                                transitions[(vertices[f"v_{x}_{y}_0_1"], direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_0_1"], end_vertices={((1 - slide_probability) * (1 - wind_probability), vertices[f"v_{x + move[0]}_{y + move[1]}_0_1"]), (slide_probability, vertices[f"v_{x + 2 * move[0]}_{y + 2 * move[1]}_0_1"]), ((1 - slide_probability) * wind_probability, vertices[f"v_{x + move[0]}_{y + move[1]}_1_1"])}, action=direction)
+                                transitions[(vertices[f"v_{x}_{y}_1_1"], "blow_" + direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_1_1"], end_vertices={(1.0, vertices[f"v_{x + move[0]}_{y + move[1]}_0_1"])}, action="blow_" + direction)
+                            case (2, 2):
                                 transitions[(vertices[f"v_{x}_{y}_0_1"], direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_0_1"], end_vertices={((1 - slide_probability) * (1 - wind_probability), vertices[f"v_{x + move[0]}_{y + move[1]}_0_1"]), (slide_probability * (1 - wind_probability), vertices[f"v_{x + 2 * move[0]}_{y + 2 * move[1]}_0_1"]), ((1 - slide_probability) * wind_probability, vertices[f"v_{x + move[0]}_{y + move[1]}_1_1"]), (slide_probability * wind_probability, vertices[f"v_{x + 2 * move[0]}_{y + 2 * move[1]}_1_1"])}, action=direction)
+                                transitions[(vertices[f"v_{x}_{y}_1_1"], "blow_" + direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_1_1"], end_vertices={(1.0, vertices[f"v_{x + move[0]}_{y + move[1]}_0_1"])}, action="blow_" + direction)
+                            case (2, 3):
+                                transitions[(vertices[f"v_{x}_{y}_0_1"], direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_0_1"], end_vertices={((1 - slide_probability) * (1 - wind_probability), vertices[f"v_{x + move[0]}_{y + move[1]}_0_1"]), (slide_probability, vertices[f"v_{x + 2 * move[0]}_{y + 2 * move[1]}_0_1"]), ((1 - slide_probability) * wind_probability, vertices[f"v_{x + move[0]}_{y + move[1]}_1_1"])}, action=direction)
                                 transitions[(vertices[f"v_{x}_{y}_1_1"], "blow_" + direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_1_1"], end_vertices={(1.0, vertices[f"v_{x + move[0]}_{y + move[1]}_0_1"])}, action="blow_" + direction)
                             case (3, _):
                                 transitions[(vertices[f"v_{x}_{y}_0_1"], direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_0_1"], end_vertices={(1.0, vertices[f"v_{x + move[0]}_{y + move[1]}_0_1"])}, action=direction)
@@ -202,8 +213,14 @@ def create_frozen_lake_spg(columns: int, rows: int, point0: tuple[int, int] | No
                             case (2, None):
                                 transitions[(vertices[f"v_{x}_{y}_0_0"], direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_0_0"], end_vertices={(1-wind_probability, vertices[f"v_{x + move[0]}_{y + move[1]}_0_0"]), (wind_probability, vertices[f"v_{x + move[0]}_{y + move[1]}_1_0"])}, action=direction)
                                 transitions[(vertices[f"v_{x}_{y}_1_0"], "blow_" + direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_1_0"], end_vertices={(1.0, vertices[f"v_{x + move[0]}_{y + move[1]}_0_0"])}, action="blow_" + direction)
-                            case (2, _):
+                            case (2, 0):
+                                transitions[(vertices[f"v_{x}_{y}_0_0"], direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_0_0"], end_vertices={((1 - slide_probability) * (1 - wind_probability), vertices[f"v_{x + move[0]}_{y + move[1]}_0_0"]), (slide_probability, vertices[f"v_{x + 2 * move[0]}_{y + 2 * move[1]}_0_0"]), ((1 - slide_probability) * wind_probability, vertices[f"v_{x + move[0]}_{y + move[1]}_1_0"])}, action=direction)
+                                transitions[(vertices[f"v_{x}_{y}_1_0"], "blow_" + direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_1_0"], end_vertices={(1.0, vertices[f"v_{x + move[0]}_{y + move[1]}_0_0"])}, action="blow_" + direction)
+                            case (2, 2):
                                 transitions[(vertices[f"v_{x}_{y}_0_0"], direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_0_0"], end_vertices={((1 - slide_probability) * (1 - wind_probability), vertices[f"v_{x + move[0]}_{y + move[1]}_0_0"]), (slide_probability * (1 - wind_probability), vertices[f"v_{x + 2 * move[0]}_{y + 2 * move[1]}_0_0"]), ((1 - slide_probability) * wind_probability, vertices[f"v_{x + move[0]}_{y + move[1]}_1_0"]), (slide_probability * wind_probability, vertices[f"v_{x + 2 * move[0]}_{y + 2 * move[1]}_1_0"])}, action=direction)
+                                transitions[(vertices[f"v_{x}_{y}_1_0"], "blow_" + direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_1_0"], end_vertices={(1.0, vertices[f"v_{x + move[0]}_{y + move[1]}_0_0"])}, action="blow_" + direction)
+                            case (2, 3):
+                                transitions[(vertices[f"v_{x}_{y}_0_0"], direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_0_0"], end_vertices={((1 - slide_probability) * (1 - wind_probability), vertices[f"v_{x + move[0]}_{y + move[1]}_0_0"]), (slide_probability, vertices[f"v_{x + 2 * move[0]}_{y + 2 * move[1]}_0_0"]), ((1 - slide_probability) * wind_probability, vertices[f"v_{x + move[0]}_{y + move[1]}_1_0"])}, action=direction)
                                 transitions[(vertices[f"v_{x}_{y}_1_0"], "blow_" + direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_1_0"], end_vertices={(1.0, vertices[f"v_{x + move[0]}_{y + move[1]}_0_0"])}, action="blow_" + direction)
                             case (3, _):
                                 transitions[(vertices[f"v_{x}_{y}_0_0"], direction)] = SpgTransition(start_vertex=vertices[f"v_{x}_{y}_0_0"], end_vertices={(1.0, vertices[f"v_{x + move[0]}_{y + move[1]}_0_0"])}, action=direction)
@@ -307,5 +324,72 @@ def create_frozen_lake_spg(columns: int, rows: int, point0: tuple[int, int] | No
     initial_vertex = vertices[f"v_{point0[0]}_{point0[1]}_0_0"]
     return StochasticParityGame(vertices=vertices, transitions=transitions, init_vertex=initial_vertex)
 
-spg = create_frozen_lake_spg(5, 2, (0, 0), share_of_holes=0.1)
-print()
+
+def create_random_spg(number_of_vertices: int, number_of_outgoing_transitions: int, number_of_priorities: int) -> StochasticParityGame:
+    vertices = {f"v_{i}": SpgVertex(name=f"v_{i}", is_eve=True if random.randint(0, 1) == 1 else False, priority=random.randint(0, number_of_priorities - 1)) for i in range(number_of_vertices)}
+    transitions = {}
+    i = 0
+    for vertex in vertices.values():
+        for i in range(number_of_outgoing_transitions):
+            if random.randint(0, 1) == 1:
+                transitions[(vertex, f"action_{i}")] = SpgTransition(start_vertex=vertex, end_vertices={(1.0, random.choice(list(vertices.values())))}, action=f"action_{i}")
+            else:
+                transitions[(vertex, f"action_{i}")] = SpgTransition(start_vertex=vertex, end_vertices={(0.5, random.choice(list(vertices.values()))), (0.5, random.choice(list(vertices.values())))}, action=f"action_{i}")
+            i += 1
+    initial_vertex = random.choice(list(vertices.values()))
+    return StochasticParityGame(vertices, transitions, initial_vertex)
+
+
+def benchmark_own_examples_for_correctness(filenames_of_benchmarks: list[str], expected_values: list[tuple[float, float]], use_global_path=False, debug: bool = False) -> None:
+    if len(filenames_of_benchmarks) != len(expected_values):
+        raise ValueError("The number of benchmark files must match the number of expected values.")
+    i = 0
+    for filename in filenames_of_benchmarks:
+        spg = read_spg_from_file(filename, use_global_path=use_global_path)
+        ssg = spg_to_ssg(spg=spg, epsilon=1e-6, print_alphas=debug)
+        smg_spec = ssg_to_smgspec(ssg=ssg, version1=True, debug=False, print_correspondingvertices=debug)
+        save_smg_file(smg_spec, file_name="temp.smg", use_global_path=use_global_path, force=True)
+        result = check_target_reachability(smg_file="temp.smg", print_probabilities=False, use_global_path=use_global_path)
+        print("####################################################################################")
+        print()
+        print(f"Expected minimum probability of Eve winning with even parity for {filename}: {expected_values[i][0]}")
+        print(f"Computed minimum probability of Eve winning with even parity for {filename}: {result[0]}")
+        print("---------------------------------------------------------------------------------------")
+        print(f"Expected maximum probability of Eve winning with even parity for {filename}: {expected_values[i][1]}")
+        print(f"Computed maximum probability of Eve winning with even parity for {filename}: {result[1]}")
+        print()
+        i += 1
+
+
+def benchmark_chain_spgs_for_correctness(use_global_path: bool = False, debug: bool = GLOBAL_DEBUG) -> None:
+    for i in range(1, 20):
+        spg = create_chain_spg(length=2 ** i, min_prob=0.5)
+        ssg = spg_to_ssg(spg=spg, epsilon=1e-6, print_alphas=debug)
+        smg_spec = ssg_to_smgspec(ssg=ssg, version1=True, debug=False, print_correspondingvertices=False)
+        save_smg_file(smg_spec, file_name="temp.smg", use_global_path=use_global_path, force=True)
+        result = check_target_reachability(smg_file="temp.smg", print_probabilities=False, use_global_path=use_global_path)
+        print("####################################################################################")
+        print()
+        print(f"Expected minimum probability of Eve winning with even parity for chain of length {2 ** i}: 1.0")
+        print(f"Computed minimum probability of Eve winning with even parity for chain of length {2 ** i}: {result[0]}")
+        print("---------------------------------------------------------------------------------------")
+        print(f"Expected maximum probability of Eve winning with even parity for chain of length {2 ** i}: 1.0")
+        print(f"Computed maximum probability of Eve winning with even parity for chain of length {2 ** i}: {result[1]}")
+        print()
+
+
+def benchmark_mutex_spg_for_correctness(use_global_path: bool = False, debug: bool = GLOBAL_DEBUG) -> None:
+    spg = create_mutex_spg()
+    ssg = spg_to_ssg(spg=spg, epsilon=1e-6, print_alphas=debug)
+    smg_spec = ssg_to_smgspec(ssg=ssg, version1=True, debug=False, print_correspondingvertices=False)
+    save_smg_file(smg_spec, file_name="temp.smg", use_global_path=use_global_path, force=True)
+    result = check_target_reachability(smg_file="temp.smg", print_probabilities=False, use_global_path=use_global_path)
+    print("####################################################################################")
+    print()
+    print(f"Expected minimum probability of Eve winning with even parity for mutex game: 0.0")
+    print(f"Computed minimum probability of Eve winning with even parity for mutex game: {result[0]}")
+    print("---------------------------------------------------------------------------------------")
+    print(f"Expected maximum probability of Eve winning with even parity for mutex game: 0.0")
+    print(f"Computed maximum probability of Eve winning with even parity for mutex game: {result[1]}")
+    print()
+

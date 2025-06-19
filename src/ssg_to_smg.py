@@ -343,12 +343,12 @@ def sanity_check_alternating_vertices(ssg: SimpleStochasticGame) -> bool:
     return True
 
 
-def check_property(smg_file, property_string, use_global_path: bool = False, debug: bool = GLOBAL_DEBUG) -> float:
+def check_property(smg_file, property_string, use_global_path: bool = False, debug: bool = GLOBAL_DEBUG, prism_path: str = PRISM_PATH, max_iters: int = MAX_ITERS, prism_epsilon: float = PRISM_EPSILON, prism_solving_algorithm: str = PRISM_SOLVING_ALGORITHM) -> float:
     if debug:
         start_time = time.perf_counter()
     if use_global_path:
         smg_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, smg_file)
-    command = f"{sh_escape(PRISM_PATH)} {sh_escape(smg_file)} -pf {sh_escape(property_string)} -maxiters {str(MAX_ITERS)} -epsilon {str(PRISM_EPSILON)} {sh_escape(PRISM_SOLVING_ALGORITHM)}"
+    command = f"{sh_escape(prism_path)} {sh_escape(smg_file)} -pf {sh_escape(property_string)} -maxiters {str(max_iters)} -epsilon {str(prism_epsilon)} {sh_escape(prism_solving_algorithm)}"
     result = run_command_linux(command=command, use_shell=True, debug=debug)
     output = result.stdout
     match = re.search(r'Result:\s*(\d\.\d+(E-\d+)?)', output)
@@ -363,14 +363,14 @@ def check_property(smg_file, property_string, use_global_path: bool = False, deb
         return -1.0
 
 
-def check_target_reachability(smg_file: str, print_probabilities: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False) -> str:
+def check_target_reachability(smg_file: str, print_probabilities: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False, prism_path: str = PRISM_PATH, max_iters: int = MAX_ITERS, prism_epsilon: float = PRISM_EPSILON, prism_solving_algorithm: str = PRISM_SOLVING_ALGORITHM) -> tuple[float, float]:
     if debug:
         start_time = time.perf_counter()
     if use_global_path:
         smg_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, smg_file)
     if debug:
         pre_prob1_time = time.perf_counter()
-    result1 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmin=? [F \"target\"]", debug=debug)
+    result1 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmin=? [F \"target\"]", debug=debug, prism_path=prism_path, max_iters=max_iters, prism_epsilon=prism_epsilon, prism_solving_algorithm=prism_solving_algorithm)
     if debug:
         print_debug(f"First prob checking time: {(time.perf_counter() - pre_prob1_time):.6f}")
     if result1 == -1.0:
@@ -390,7 +390,7 @@ def check_target_reachability(smg_file: str, print_probabilities: bool = False, 
         print(result)
     if debug:
         print_debug(f"Target reachability check completed in {(time.perf_counter() - start_time):.6f} seconds")
-    return result
+    return result1, result2
 
 
 def save_smg_file(content: str, file_name: str = "", force: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False):

@@ -47,5 +47,8 @@ def run_command_linux(command: str | list[str], use_shell: bool = True, debug: b
         return result
 
     except subprocess.CalledProcessError as e:
-        print_error(f"Command {command} failed with error: {e.stderr}")
+        if len(e.stderr) > 0:
+            print_error(f"Command {command} failed with error: {e.stderr}")
+        else:
+            print_error(f"Command {command} failed with error: {e.stdout}")
         return None
