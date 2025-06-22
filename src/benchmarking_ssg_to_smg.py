@@ -1100,7 +1100,7 @@ def main():
 
 if __name__ == '__main__':
     import multiprocessing
-    multiprocessing.freeze_support()  # Optional, hilft bei frozen executables
+    multiprocessing.freeze_support()
     main()
 
 # read_benchmark_results("benchmarks/test_benchmark_file.txt", use_global_path=True)

@@ -146,6 +146,18 @@ class SimpleStochasticGame:
                 return True
         return False
 
+    def has_alpha_underflow(self) -> bool:
+        """
+        Checks if the stochastic parity game has an alpha underflow.
+        :return: 'True' if the game has an alpha underflow, False otherwise
+        :rtype: bool
+        """
+        for transition in self.transitions.values():
+            for prob, end_vertex in transition.end_vertices:
+                if prob <= 0:
+                    return True
+        return False
+
 
 def has_ssg_vertex_ingoing_transition(vertex: SsgVertex, transitions: dict[tuple[SsgVertex, str], SsgTransition]) -> bool:
     """

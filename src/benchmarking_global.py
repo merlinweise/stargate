@@ -1,10 +1,15 @@
 # Imports
 import random
-import os
+import queue as pyqueue
+import time
+from pympler import asizeof
 
-from src.ssg_to_smg import check_target_reachability
+from multiprocessing import Process, Queue
+
+from src.ssg_to_smg import check_property
+from ssg_to_smg import check_target_reachability
 from stochasticparitygame import SpgVertex, SpgTransition, StochasticParityGame, read_spg_from_file
-from error_handling import print_error
+from error_handling import print_error, print_debug
 from spg_to_ssg_reduction import spg_to_ssg
 from ssg_to_smg import ssg_to_smgspec, save_smg_file
 from settings import GLOBAL_DEBUG
@@ -328,14 +333,12 @@ def create_frozen_lake_spg(columns: int, rows: int, point0: tuple[int, int] | No
 def create_random_spg(number_of_vertices: int, number_of_outgoing_transitions: int, number_of_priorities: int) -> StochasticParityGame:
     vertices = {f"v_{i}": SpgVertex(name=f"v_{i}", is_eve=True if random.randint(0, 1) == 1 else False, priority=random.randint(0, number_of_priorities - 1)) for i in range(number_of_vertices)}
     transitions = {}
-    i = 0
     for vertex in vertices.values():
         for i in range(number_of_outgoing_transitions):
             if random.randint(0, 1) == 1:
                 transitions[(vertex, f"action_{i}")] = SpgTransition(start_vertex=vertex, end_vertices={(1.0, random.choice(list(vertices.values())))}, action=f"action_{i}")
             else:
                 transitions[(vertex, f"action_{i}")] = SpgTransition(start_vertex=vertex, end_vertices={(0.5, random.choice(list(vertices.values()))), (0.5, random.choice(list(vertices.values())))}, action=f"action_{i}")
-            i += 1
     initial_vertex = random.choice(list(vertices.values()))
     return StochasticParityGame(vertices, transitions, initial_vertex)
 
@@ -393,3 +396,188 @@ def benchmark_mutex_spg_for_correctness(use_global_path: bool = False, debug: bo
     print(f"Computed maximum probability of Eve winning with even parity for mutex game: {result[1]}")
     print()
 
+
+def _iteration_worker(q: Queue, method_with_args: tuple) -> None:
+    """
+
+    """
+    method, args = method_with_args
+    try:
+        result = method(*args)
+        q.put(result)
+    except Exception as e:
+        q.put(e)
+
+
+def benchmark_frozen_lake(timeout: int = 3600, abort_when_alpha_underflow: bool = True, use_global_path: bool = False, debug: bool = GLOBAL_DEBUG) -> None:
+    for size in range(1, 11):
+        q = Queue()
+        p = Process(target=_iteration_worker, args=(q, (create_frozen_lake_spg, (size, size, None, None, 0.1, 0.5, 0.5))))
+        start_time = time.perf_counter()
+        if debug:
+            print_debug(f"Start creating frozen lake benchmark for size {size} by {size}...")
+        p.start()
+        p.join(timeout=timeout)
+        end_time = time.perf_counter()
+
+        if p.is_alive():
+            if debug:
+                print_debug(f"Timeout of {timeout} seconds reached for frozen lake creation with size {size} by {size}.")
+            p.terminate()
+            p.join()
+        try:
+            result = q.get_nowait()
+            print(f"Creating frozen lake with size {size} by {size} took {end_time - start_time:.2f} seconds.")
+            print(f"Size of SPG: {asizeof.asizeof(result)} bytes.")
+        except pyqueue.Empty:
+            print_error(f"Error: No result received from subprocess for creating frozen lake with size {size} by {size}.")
+            break
+
+        if isinstance(result, Exception):
+            print_error(f"Subprocess failed with exception: {result}")
+            break
+
+        spg = result
+
+        q = Queue()
+        p = Process(target=_iteration_worker, args=(q, (spg_to_ssg, (spg, 1e-6, True))))
+        start_time = time.perf_counter()
+        if debug:
+            print_debug(f"Start transforming frozen lake benchmark for size {size} by {size} to SSG...")
+        p.start()
+        p.join(timeout=timeout)
+        end_time = time.perf_counter()
+
+        if p.is_alive():
+            if debug:
+                print_debug(f"Timeout of {timeout} seconds reached for transforming frozen lake with size {size} by {size}.")
+            p.terminate()
+            p.join()
+        try:
+            result = q.get_nowait()
+            print(f"Transforming frozen lake with size {size} by {size} to SSG took {end_time - start_time:.2f} seconds.")
+            print(f"Size of SSG: {asizeof.asizeof(result)} bytes.")
+        except pyqueue.Empty:
+            print_error(
+                f"Error: No result received from subprocess for transforming frozen lake with size {size} by {size}.")
+            break
+
+        if isinstance(result, Exception):
+            print_error(f"Subprocess failed with exception: {result}")
+            break
+        ssg = result
+        if ssg.has_alpha_underflow():
+            print_error(f"Alpha underflow detected in frozen lake with size {size} by {size}.")
+            if abort_when_alpha_underflow:
+                break
+
+        q = Queue()
+        p = Process(target=_iteration_worker, args=(q, (ssg_to_smgspec, (ssg, True, True, False))))
+        start_time = time.perf_counter()
+        if debug:
+            print_debug(f"Start transforming frozen lake benchmark for size {size} by {size} to SMG...")
+        p.start()
+        p.join(timeout=timeout)
+        end_time = time.perf_counter()
+
+        if p.is_alive():
+            if debug:
+                print_debug(
+                    f"Timeout of {timeout} seconds reached for transforming frozen lake with size {size} by {size}.")
+            p.terminate()
+            p.join()
+        try:
+            result = q.get_nowait()
+            print(f"Transforming frozen lake with size {size} by {size} to SMG took {end_time - start_time:.2f} seconds.")
+            print(f"Size of SMG specification: {asizeof.asizeof(result)} bytes.")
+        except pyqueue.Empty:
+            print_error(
+                f"Error: No result received from subprocess for transforming frozen lake with size {size} by {size}.")
+            break
+
+        if isinstance(result, Exception):
+            print_error(f"Subprocess failed with exception: {result}")
+            break
+        smgspec = result
+        save_smg_file(content=smgspec, file_name=f"temp.smg", use_global_path=use_global_path, force=True)
+
+        q = Queue()
+        p = Process(target=_iteration_worker, args=(q, (check_property, ("temp.smg", f"<<eve>> Pmin=? [F \"target\"]", use_global_path, False))))
+        start_time = time.perf_counter()
+        if debug:
+            print_debug(f"Start checking first target reachability property of frozen lake benchmark for size {size} by {size}...")
+        p.start()
+        p.join(timeout=timeout)
+        end_time = time.perf_counter()
+
+        if p.is_alive():
+            if debug:
+                print_debug(
+                    f"Timeout of {timeout} seconds reached for checking frozen lake with size {size} by {size}.")
+            p.terminate()
+            p.join()
+        try:
+            result = q.get_nowait()
+            print(
+                f"Checking frozen lake with size {size} by {size} to SMG took {end_time - start_time:.2f} seconds.")
+        except pyqueue.Empty:
+            print_error(
+                f"Error: No result received from subprocess for transforming frozen lake with size {size} by {size}.")
+            break
+
+        if isinstance(result, Exception):
+            print_error(f"Subprocess failed with exception: {result}")
+            break
+        result1 = result
+        print(f"Probability of Eve winning when trying to lose: {result1}")
+
+        q = Queue()
+        p = Process(target=_iteration_worker,
+                    args=(q, (check_property, ("temp.smg", f"<<eve>> Pmin=? [F \"target\"]", use_global_path, False))))
+        start_time = time.perf_counter()
+        if debug:
+            print_debug(
+                f"Start checking second target reachability property of frozen lake benchmark for size {size} by {size}...")
+        p.start()
+        p.join(timeout=timeout)
+        end_time = time.perf_counter()
+
+        if p.is_alive():
+            if debug:
+                print_debug(
+                    f"Timeout of {timeout} seconds reached for checking frozen lake with size {size} by {size}.")
+            p.terminate()
+            p.join()
+        try:
+            result = q.get_nowait()
+            print(
+                f"Checking frozen lake with size {size} by {size} to SMG took {end_time - start_time:.2f} seconds.")
+        except pyqueue.Empty:
+            print_error(
+                f"Error: No result received from subprocess for transforming frozen lake with size {size} by {size}.")
+            break
+
+        if isinstance(result, Exception):
+            print_error(f"Subprocess failed with exception: {result}")
+            break
+        result2 = result
+        print(f"Probability of Eve winning when trying to win: {result2}")
+
+
+def main():
+    i = 3
+    while True:
+        print(f"Iteration {i}")
+        spg = create_frozen_lake_spg(i, i)
+        ssg = spg_to_ssg(spg=spg, epsilon=1e-6, print_alphas=True)
+        print(asizeof.asizeof(ssg))
+        if ssg.has_alpha_underflow():
+            print(f"Alpha underflow detected in frozen lake with size {i} by {i}. Aborting benchmark.")
+            break
+        i += 1
+
+
+if __name__ == '__main__':
+    import multiprocessing
+    multiprocessing.freeze_support()
+    main()
