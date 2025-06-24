@@ -2,8 +2,9 @@ import os
 import re
 import time
 
+from fractions import Fraction
 from error_handling import print_warning, print_error, print_debug, is_float_expr, float_or_fraction
-from settings import GLOBAL_DEBUG, PRINT_VERTEX_CREATION_WARNINGS, ENSURE_EVE_AND_ADAM_VERTICES, GLOBAL_IN_OUT_PATH
+from settings import GLOBAL_DEBUG, PRINT_VERTEX_CREATION_WARNINGS, ENSURE_EVE_AND_ADAM_VERTICES, GLOBAL_IN_OUT_PATH, USE_EXACT_ARITHMETIC, MAX_DENOMINATOR
 
 
 class SsgVertex:
@@ -41,13 +42,13 @@ class SsgVertex:
 
 
 class SsgTransition:
-    def __init__(self, start_vertex: SsgVertex, end_vertices: set[tuple[float, SsgVertex]], action: str):
+    def __init__(self, start_vertex: SsgVertex, end_vertices: set[tuple[float | Fraction, SsgVertex]], action: str):
         """
         Creates a transition of a simple stochastic game.
         :param start_vertex: Starting vertex of the transition
         :type start_vertex: SsgVertex
         :param end_vertices: Set of tuples of probabilities and respective end vertices
-        :type end_vertices: set[(float, SsgVertex)]
+        :type end_vertices: set[(float | Fraction, SsgVertex)]
         :param action:
         :type action: str
         """
@@ -64,6 +65,11 @@ class SsgTransition:
             print_warning(f"Sum ({total_prob}) of probabilities does not equal 1 of edge from {self.start_vertex.name} with action {self.action}")
         if neg_probs:
             print_warning(f"There is at least one probability that is negative of edge from {self.start_vertex.name} with action {self.action}")
+        if USE_EXACT_ARITHMETIC:
+            # Change all probabilities to fractions
+            self.end_vertices = set()
+            for prob, vert in end_vertices:
+                self.end_vertices.add((Fraction(prob).limit_denominator(MAX_DENOMINATOR), vert))
 
     def __str__(self):
         """

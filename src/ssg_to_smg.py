@@ -4,10 +4,11 @@ import time
 import re
 import posixpath
 
+from path_conversion import windows_to_linux_path, linux_to_windows_path, is_linux_path
 from simplestochasticgame import SimpleStochasticGame, SsgTransition, SsgVertex
 from shell_commands import run_command, sh_escape, run_command_linux
 from error_handling import print_warning, print_debug
-from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_LINUX, PRISM_PATH, MAX_ITERS, PRISM_EPSILON, PRISM_SOLVING_ALGORITHM, GLOBAL_IN_OUT_PATH, IS_OS_LINUX, GLOBAL_IN_OUT_PATH_WINDOWS
+from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_LINUX, PRISM_PATH, MAX_ITERS, PRISM_EPSILON, PRISM_SOLVING_ALGORITHM, GLOBAL_IN_OUT_PATH, IS_OS_LINUX
 
 
 def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: bool = GLOBAL_DEBUG, print_correspondingvertices: bool = False) -> str:
@@ -418,18 +419,29 @@ def save_smg_file(content: str, file_name: str = "", force: bool = False, debug:
 def create_dot_file(smg_file: str, dot_file: str = "", force: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False):
     if debug:
         start_time = time.perf_counter()
-    if use_global_path:
-        if not IS_OS_LINUX:
-            smg_file_win = os.path.join(GLOBAL_IN_OUT_PATH_WINDOWS, smg_file)
+    if use_global_path and (not dot_file or dot_file.endswith(".dot")):
         smg_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, smg_file)
-    if not dot_file:
-        if not IS_OS_LINUX:
-            dot_file_win = smg_file_win.replace(".smg", ".dot")
         dot_file = smg_file.replace(".smg", ".dot")
-    if use_global_path:
         if not IS_OS_LINUX:
-            dot_file_win = os.path.join(GLOBAL_IN_OUT_PATH_WINDOWS, dot_file_win)
+            dot_file_win = linux_to_windows_path(dot_file)
+    elif use_global_path and not (not dot_file or dot_file.endswith(".dot")):
+        smg_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, smg_file)
         dot_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, dot_file)
+        if not IS_OS_LINUX:
+            dot_file_win = linux_to_windows_path(dot_file)
+    elif not use_global_path and (not dot_file or not dot_file.endswith(".dot")):
+        if not is_linux_path(smg_file):
+            smg_file = windows_to_linux_path(smg_file)
+        dot_file = smg_file.replace(".smg", ".dot")
+        if not IS_OS_LINUX:
+            dot_file_win = linux_to_windows_path(dot_file)
+    else:
+        if not is_linux_path(smg_file):
+            smg_file = windows_to_linux_path(smg_file)
+        if not is_linux_path(dot_file):
+            dot_file = windows_to_linux_path(dot_file)
+        if not IS_OS_LINUX:
+            dot_file_win = linux_to_windows_path(dot_file)
     if not IS_OS_LINUX:
         if not force and os.path.exists(dot_file_win) and os.path.getsize(dot_file_win) > 0:
             print_warning("DOT file already exists. Nothing was changed")
@@ -447,36 +459,91 @@ def create_dot_file(smg_file: str, dot_file: str = "", force: bool = False, debu
 def create_png_file(dot_file: str, png_file: str = "", open_png: bool = False, force: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False):
     if debug:
         start_time = time.perf_counter()
-    if use_global_path:
-        if not IS_OS_LINUX:
-            dot_file_win = os.path.join(GLOBAL_IN_OUT_PATH_WINDOWS, dot_file)
+    if use_global_path and (not png_file or png_file.endswith(".png")):
         dot_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, dot_file)
-    if not png_file:
-        if not IS_OS_LINUX:
-            png_file_win = dot_file_win.replace(".dot", ".png")
         png_file = dot_file.replace(".dot", ".png")
-    if use_global_path:
         if not IS_OS_LINUX:
-            png_file_win = os.path.join(GLOBAL_IN_OUT_PATH_WINDOWS, png_file_win)
+            png_file_win = linux_to_windows_path(png_file)
+    elif use_global_path and not (not png_file or png_file.endswith(".png")):
+        dot_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, dot_file)
         png_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, png_file)
+        if not IS_OS_LINUX:
+            png_file_win = linux_to_windows_path(png_file)
+    elif not use_global_path and (not png_file or not png_file.endswith(".png")):
+        if not is_linux_path(dot_file):
+            dot_file = windows_to_linux_path(dot_file)
+        png_file = dot_file.replace(".dot", ".png")
+        if not IS_OS_LINUX:
+            png_file_win = linux_to_windows_path(png_file)
+    else:
+        if not is_linux_path(dot_file):
+            dot_file = windows_to_linux_path(dot_file)
+        if not is_linux_path(png_file):
+            png_file = windows_to_linux_path(png_file)
+        if not IS_OS_LINUX:
+            png_file_win = linux_to_windows_path(png_file)
+
     if not IS_OS_LINUX:
         if not force and os.path.exists(png_file_win) and os.path.getsize(png_file_win) > 0:
             print_warning("PNG file already exists. Nothing was changed")
         else:
-            run_command("dot -Tpng " + dot_file_win + " -o " + png_file_win, use_shell=True, debug=debug)
+            dot_file_win = linux_to_windows_path(dot_file)
+            run_command(f"dot -Tpng {dot_file_win} -o {png_file_win}", use_shell=True, debug=debug)
     else:
         if not force and os.path.exists(png_file) and os.path.getsize(png_file) > 0:
             print_warning("PNG file already exists. Nothing was changed")
         else:
             run_command(f"dot -Tpng {sh_escape(dot_file)} -o {sh_escape(png_file)}", use_shell=True, debug=debug)
+    if debug:
+        print_debug(f"PNG file {dot_file} created in {(time.perf_counter() - start_time):.6f} seconds")
     if open_png:
         if IS_OS_LINUX:
             run_command(f"xdg-open {png_file}", use_shell=True, debug=debug)
         else:
             run_command(f"start {png_file_win}", use_shell=True, debug=debug)
+
+
+def create_svg_file(dot_file: str, svg_file: str = "", open_svg: bool = False, force: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False):
     if debug:
-        print_debug(f"PNG file {dot_file} created in {(time.perf_counter() - start_time):.6f} seconds")
-
-
-# create_dot_file("raphael2.smg", force=True, use_global_path=True)
-# create_png_file("raphael2.dot", force=True, use_global_path=True, open_png=True)
+        start_time = time.perf_counter()
+    if use_global_path and (not svg_file or svg_file.endswith(".svg")):
+        dot_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, dot_file)
+        svg_file = dot_file.replace(".dot", ".svg")
+        if not IS_OS_LINUX:
+            svg_file_win = linux_to_windows_path(svg_file)
+    elif use_global_path and not (not svg_file or svg_file.endswith(".svg")):
+        dot_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, dot_file)
+        svg_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, svg_file)
+        if not IS_OS_LINUX:
+            svg_file_win = linux_to_windows_path(svg_file)
+    elif not use_global_path and (not svg_file or not svg_file.endswith(".svg")):
+        if not is_linux_path(dot_file):
+            dot_file = windows_to_linux_path(dot_file)
+        svg_file = dot_file.replace(".dot", ".svg")
+        if not IS_OS_LINUX:
+            svg_file_win = linux_to_windows_path(svg_file)
+    else:
+        if not is_linux_path(dot_file):
+            dot_file = windows_to_linux_path(dot_file)
+        if not is_linux_path(svg_file):
+            svg_file = windows_to_linux_path(svg_file)
+        if not IS_OS_LINUX:
+            svg_file_win = linux_to_windows_path(svg_file)
+    if not IS_OS_LINUX:
+        if not force and os.path.exists(svg_file_win) and os.path.getsize(svg_file_win) > 0:
+            print_warning("SVG file already exists. Nothing was changed")
+        else:
+            dot_file_win = linux_to_windows_path(dot_file)
+            run_command(f"dot -Tsvg {dot_file_win} -o {svg_file_win}", use_shell=True, debug=debug)
+    else:
+        if not force and os.path.exists(svg_file) and os.path.getsize(svg_file) > 0:
+            print_warning("SVG file already exists. Nothing was changed")
+        else:
+            run_command(f"dot -Tsvg {sh_escape(dot_file)} -o {sh_escape(svg_file)}", use_shell=True, debug=debug)
+    if debug:
+        print(f"SVG file {dot_file} created in {(time.perf_counter() - start_time):.6f} seconds")
+    if open_svg:
+        if IS_OS_LINUX:
+            run_command_linux(f"xdg-open {svg_file}", use_shell=True, debug=debug)
+        else:
+            run_command(f"start {svg_file_win}", use_shell=True, debug=debug)

@@ -1,8 +1,9 @@
 import re
 import os
 import time
+from fractions import Fraction
 
-from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_WINDOWS, PRINT_VERTEX_CREATION_WARNINGS, GLOBAL_IN_OUT_PATH
+from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_WINDOWS, PRINT_VERTEX_CREATION_WARNINGS, GLOBAL_IN_OUT_PATH, USE_EXACT_ARITHMETIC, MAX_DENOMINATOR
 from error_handling import print_warning, print_error, print_debug, is_float_expr, float_or_fraction
 
 
@@ -58,6 +59,11 @@ class SpgTransition:
             print_warning(f"Sum ({total_prob}) of probabilities does not equal 1 of edge from {self.start_vertex.name} with action {self.action}")
         if neg_probs:
             print_warning("There is at least one probability that is negative of edge from {self.start_vertex.name} with action {self.action}")
+        if USE_EXACT_ARITHMETIC:
+            # Change all probabilities to fractions
+            self.end_vertices = set()
+            for prob, vert in end_vertices:
+                self.end_vertices.add((Fraction(prob).limit_denominator(MAX_DENOMINATOR), vert))
 
     def __str__(self):
         """

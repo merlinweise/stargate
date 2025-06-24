@@ -1,13 +1,18 @@
 import os
 import subprocess
-from pathlib import PureWindowsPath
 
+from path_conversion import windows_to_linux_path
 from error_handling import print_error
+
+USE_EXACT_ARITHMETIC = True  # If True, replaces floats with exact arithmetic (fractions), default is True
+MAX_DENOMINATOR = 2147483647  # 2,147,483,647 is the optimal value for PRISM-games
 
 GLOBAL_IN_OUT_PATH_LINUX = ""  # only assign if the OS is Linux, otherwise it will be set to GLOBAL_IN_OUT_PATH_WINDOWS
 GLOBAL_IN_OUT_PATH_WINDOWS = "C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\PRISMgames_testing\\program_in_and_out"  # only assign if the OS is Windows, otherwise it will be set to GLOBAL_IN_OUT_PATH_LINUX
+
 GLOBAL_DEBUG = False  # If True, prints debug information, default is False
 PRINT_VERTEX_CREATION_WARNINGS = False  # If True, prints warnings about deadlock vertices and vertices with no outgoing transitions, default is False
+
 ENSURE_EVE_AND_ADAM_VERTICES = True  # If True, ensures that every SRG and SPG has at least one Eve and one Adam vertex, if False, the algorithm will not ensure this, default is True
 PRISM_EPSILON = 1e-6  # Epsilon for PRISM, used for numerical stability in value iteration algorithms, default is 1e-6
 MAX_ITERS = 1000000000  # Maximum number of iterations for PRISM algorithms, default is 10000
@@ -15,30 +20,12 @@ PRISM_PATH = "/mnt/c/Uni_Zeug/6.Semester/Bachelorarbeit/prism_extension/Algorith
 PRISM_SOLVING_ALGORITHM = "POLICY_ITERATION"  # "VALUE_ITERATION" or "GAUSS_SEIDEL_VALUE_ITERATION" or "POLICY_ITERATION" or "MODIFIED_POLICY_ITERATION" or "INTERVAL_ITERATION" or "SOUND_VALUE_ITERATION" or "TOPOLOGICAL VALUE_ITERATION" or "SOUND_TOPOLOGICAL_VALUE_ITERATION" or "SOUND_POLICY_ITERATION" or "SOUND_MODIFIED_POLICY_ITERATION"
 
 
-# ----------------------------------------------------------------------------------------------------------------
+# ---------------------------------------------Automatic Settings-------------------------------------------------------
 
 if GLOBAL_IN_OUT_PATH_LINUX == "" and GLOBAL_IN_OUT_PATH_WINDOWS == "":
     print_error("Global input/output path is not set. Please set GLOBAL_IN_OUT_PATH_LINUX or GLOBAL_IN_OUT_PATH_WINDOWS.")
 if GLOBAL_IN_OUT_PATH_LINUX == "":
-    path = GLOBAL_IN_OUT_PATH_WINDOWS.strip()
-    if path.startswith('\\\\'):
-        parts = path.lstrip('\\').split('\\')
-        if len(parts) >= 2:
-            server = parts[0]
-            share = parts[1]
-            subpath = '/'.join(parts[2:])
-            GLOBAL_IN_OUT_PATH_LINUX = f"smb://{server}/{share}/{subpath}"
-        else:
-            GLOBAL_IN_OUT_PATH_LINUX = "smb://" + path.lstrip('\\\\').replace('\\', '/')
-    elif ':' in path[0:3]:
-        p = PureWindowsPath(path)
-        drive = p.drive.lower().replace(':', '')
-        GLOBAL_IN_OUT_PATH_LINUX = f"/mnt/{drive}/{'/'.join(p.parts[1:])}"
-    elif path.startswith('\\'):
-        path = path.lstrip('\\')
-        GLOBAL_IN_OUT_PATH_LINUX = "/mnt/" + os.getcwd()[0].lower() + "/" + path.replace('\\', '/')
-    else:
-        GLOBAL_IN_OUT_PATH_LINUX = path.replace('\\', '/')
+    GLOBAL_IN_OUT_PATH_LINUX = windows_to_linux_path(GLOBAL_IN_OUT_PATH_WINDOWS)
 
 GLOBAL_IN_OUT_PATH = GLOBAL_IN_OUT_PATH_LINUX if os.name == 'posix' else GLOBAL_IN_OUT_PATH_WINDOWS
 

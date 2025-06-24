@@ -1,8 +1,10 @@
 from fractions import Fraction
 from math import factorial
 
-from src.stochasticparitygame import StochasticParityGame, read_spg_from_file
-from src.simplestochasticgame import SimpleStochasticGame, SsgVertex, SsgTransition
+from error_handling import print_error
+from stochasticparitygame import StochasticParityGame, read_spg_from_file
+from simplestochasticgame import SimpleStochasticGame, SsgVertex, SsgTransition
+from settings import USE_EXACT_ARITHMETIC, MAX_DENOMINATOR
 
 
 def max_denom_and_min_prob(spg: StochasticParityGame, max_d: int=10_000) -> (float, int):
@@ -26,6 +28,8 @@ def max_denom_and_min_prob(spg: StochasticParityGame, max_d: int=10_000) -> (flo
 def compute_alphas_for_spg(spg: StochasticParityGame, epsilon: float = None, max_d: int = 10_000):
 
     delta_min_float, max_denominator_M = max_denom_and_min_prob(spg, max_d)
+    if delta_min_float == 1.0:
+        print_error("The StochasticParity is not stochastic, therefore the reduction cannot be performed.")
     n_states = len(spg.vertices)
     used = sorted({v.priority for v in spg.vertices.values()})
 
@@ -34,7 +38,7 @@ def compute_alphas_for_spg(spg: StochasticParityGame, epsilon: float = None, max
     if epsilon is None:
         numerator   = delta_min ** n_states
         denominator = 8 * factorial(n_states) ** 2 * max_denominator_M ** (2 * n_states * n_states)
-        alpha0 = float(numerator / denominator)
+        alpha0 = numerator / denominator
 
         ratio_bound = (one_minus * (delta_min ** n_states)) / (denominator + 1)
 
@@ -44,10 +48,10 @@ def compute_alphas_for_spg(spg: StochasticParityGame, epsilon: float = None, max
             alphas[next_k] = alphas[prev_k] * (ratio_bound ** gap)
     else:
         numerator = Fraction(4) * Fraction(epsilon) * delta_min ** n_states
-        denominator = (4 - epsilon) * delta_min
-        alpha0 = float(numerator / denominator)
+        denominator = (Fraction(4) - Fraction(epsilon)) * delta_min
+        alpha0 = numerator / denominator
 
-        ratio_bound = (one_minus * (delta_min ** n_states)) / (((8 * (4 - epsilon)) / (4 * epsilon)) + 1)
+        ratio_bound = (one_minus * (delta_min ** n_states)) / (((8 * (4 - Fraction(epsilon))) / (4 * Fraction(epsilon))) + 1)
         alphas = { used[0]: alpha0 }
         for prev_k, next_k in zip(used, used[1:]):
             gap = next_k - prev_k
@@ -71,7 +75,7 @@ def spg_to_ssg(spg: StochasticParityGame, epsilon: float = None, print_alphas: b
     if print_alphas:
         print("Computed alphas:")
         for k, v in alphas.items():
-            print(f"Priority {k}: {v}")
+            print(f"Priority {k}: {float(v)}" + (f" | Optimized to {v.limit_denominator(MAX_DENOMINATOR)}" if USE_EXACT_ARITHMETIC else ""))
     vertices: dict[str, SsgVertex] = dict()
     transitions: dict[tuple[SsgVertex, str], SsgTransition] = dict()
     respective_spg_ssg_vertixes: dict[SpgVertex, SsgVertex] = dict()
@@ -123,14 +127,3 @@ def spg_to_ssg(spg: StochasticParityGame, epsilon: float = None, print_alphas: b
         else:
             transitions[(respective_intermediate_vertices[respective_spg_ssg_vertixes[vertex]], "alpha")] = SsgTransition(respective_intermediate_vertices[respective_spg_ssg_vertixes[vertex]], {(alphas[vertex.priority], vertices["v_lose"]), (1 - alphas[vertex.priority], vertices[respective_spg_ssg_vertixes[vertex].name])}, "alpha")
     return SimpleStochasticGame(vertices, transitions, initial_vertex)
-
-
-
-"""spg = read_spg_from_file("raphael3.spg", use_global_path=True)
-ssg = spg_to_ssg(spg, epsilon=1e-6, print_alphas=True)
-from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability, create_dot_file, create_png_file
-smgspec = ssg_to_smgspec(ssg, version1=True, print_correspondingvertices=True)
-save_smg_file(smgspec, "raphael3.smg", use_global_path=True, force=True)
-# create_dot_file("raphael3.smg", use_global_path=True, debug=True, force=True)
-# create_png_file("raphael3.dot", use_global_path=True, force=True)
-check_target_reachability("raphael3.smg", use_global_path=True, print_probabilities=True, debug=False)"""

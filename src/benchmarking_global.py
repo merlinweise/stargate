@@ -6,7 +6,6 @@ from pympler import asizeof
 
 from multiprocessing import Process, Manager
 
-
 from ssg_to_smg import check_target_reachability
 from stochasticparitygame import SpgVertex, SpgTransition, StochasticParityGame, read_spg_from_file
 from error_handling import print_error, print_debug, print_warning
@@ -18,7 +17,10 @@ from settings import GLOBAL_DEBUG, MAX_ITERS, PRISM_PATH, PRISM_EPSILON
 def create_chain_spg(length: int, min_prob: float) -> StochasticParityGame:
     vertices = {}
     for i in range(length + 1):
-        vertices["v" + str(i)] = SpgVertex(name="v" + str(i), is_eve=True, priority=0)
+        if i == length:
+            vertices["v" + str(i)] = SpgVertex(name="v" + str(i), is_eve=True, priority=0)
+        else:
+            vertices["v" + str(i)] = SpgVertex(name="v" + str(i), is_eve=True, priority=1)
     transitions = {}
     for i in range(length):
         transitions[(vertices["v" + str(i)], "next")] = SpgTransition(start_vertex=vertices["v" + str(i)], end_vertices={(min_prob, vertices["v" + str(i + 1)]), (1 - min_prob, vertices["v" + "0"])}, action="next")
@@ -750,16 +752,24 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
     return benchmark_results
 
 
-
 def main():
-    # benchmark_frozen_lake(3600, False, use_global_path=True, debug=True)
+    """# benchmark_frozen_lake(3600, False, use_global_path=True, debug=True)
     number_of_vertices = [5, 10, 20]
     share_of_outgoing_transitions = [0.2]
     number_of_priorities = [2]
     spg_transformation_epsilon = [1e-6, 1e-1]
     prism_algorithm = ["-valiter", "-politer"]
     res = benchmark_random_spgs(number_of_vertices, share_of_outgoing_transitions, number_of_priorities, spg_transformation_epsilon, prism_algorithm, timeout=60, abort_when_alpha_underflow=False, use_global_path=True, debug=True)
-    print()
+    print()"""
+    spg = create_frozen_lake_spg(columns=2, rows=2, point0=(0, 0), point1=(1, 1))
+    ssg = spg_to_ssg(spg=spg, epsilon=1e-6, print_alphas=True)
+    smg_spec = ssg_to_smgspec(ssg=ssg, version1=True, debug=False, print_correspondingvertices=True)
+    save_smg_file(content=smg_spec, file_name="temp.smg", use_global_path=True, force=True)
+    from ssg_to_smg import create_dot_file, create_svg_file
+    check_target_reachability("temp.smg", print_probabilities=True, use_global_path=True, prism_solving_algorithm="-politer")
+    create_dot_file("temp.smg", "temp.dot", use_global_path=True, force=True)
+    create_svg_file("temp.dot", "temp.svg", use_global_path=True, force=True, open_svg=True)
+
 
 if __name__ == '__main__':
     import multiprocessing

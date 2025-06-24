@@ -1102,13 +1102,3 @@ if __name__ == '__main__':
     import multiprocessing
     multiprocessing.freeze_support()
     main()
-
-# read_benchmark_results("benchmarks/test_benchmark_file.txt", use_global_path=True)
-
-# plot_benchmark_results([1, 10, 100, 1000], [1, 20, 50, 1500], [1, 10, 100, 1000], [1, 20, 50, 1500], [1, 10, 100, 1000], [1, 20, 50, 1500], [1, 10, 100, 1000], [1, 20, 50, 1500], ("ex", "random", -1, -1), True, True, "test_plot", False, use_global_path=True)
-
-# plot_combined_benchmark_results([([1.0], [0.5], [0.5], [1.0], [10], [20], [20], [10], ("ex", "random", 1, 1)), ([1.0, 5.0], [2.0, 10.0], [10.0, 50.0], [20.0, 100.0], [10.0, 20.0], [20.0, 40.0], [100.0, 200.0], [200.0, 400.0], ("normal", "empty", 1, 1))], show_times=False, show_stats=False, plot_name="test_combined_plot", save_plots=True, use_global_path=True)
-
-# benchmark_multiple_ssgs(3, "random", 10, True, use_global_path=True, force=True, debug=True)
-# lis = read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\PRISMgames_testing\\program_in_and_out\\benchmark_results_normal_3_random_10.txt", use_global_path=True)
-# plot_combined_benchmark_results([lis], show_times=True, show_stats=True, plot_name="test_combined_plot", save_plots=True, use_global_path=True)
