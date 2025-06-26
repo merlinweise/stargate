@@ -56,6 +56,8 @@ def compute_alphas_for_spg(spg: StochasticParityGame, epsilon: float = None, max
         for prev_k, next_k in zip(used, used[1:]):
             gap = next_k - prev_k
             alphas[next_k] = alphas[prev_k] * (ratio_bound ** gap)
+    if not USE_EXACT_ARITHMETIC:
+        alphas = {k: float(v) for k, v in alphas.items()}
     return alphas
 
 
@@ -89,13 +91,13 @@ def spg_to_ssg(spg: StochasticParityGame, epsilon: float = None, print_alphas: b
     respective_intermediate_vertices: dict[SsgVertex, SsgVertex] = dict()
     for v in spg.vertices.values():
         if not vertices.keys().__contains__(v.name+"\'"):
-            new_vertices[v.name+"\'"] = SsgVertex(name=v.name + "\'", is_eve=v.is_eve, is_target=False)
+            new_vertices[v.name+"\'"] = SsgVertex(name=v.name + "\'", is_eve=not v.is_eve, is_target=False)
             respective_intermediate_vertices[vertices[v.name]] = new_vertices[v.name+"\'"]
         else:
             i = 0
             while vertices.keys().__contains__(v.name+"\'"+str(i)):
                 i += 1
-            new_vertices[v.name+"\'"+str(i)] = SsgVertex(name=v.name + "\'" + str(i), is_eve=v.is_eve, is_target=False)
+            new_vertices[v.name+"\'"+str(i)] = SsgVertex(name=v.name + "\'" + str(i), is_eve=not v.is_eve, is_target=False)
             respective_intermediate_vertices[vertices[v.name]] = new_vertices[v.name+"\'"+str(i)]
     vertices |= new_vertices
     if not vertices.keys().__contains__("v_win"):

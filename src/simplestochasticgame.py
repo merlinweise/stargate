@@ -123,6 +123,17 @@ class SimpleStochasticGame:
                 self.transitions[vertex, "selfloop"] = SsgTransition(vertex, {(1.0, vertex)}, "selfloop")
                 if GLOBAL_DEBUG and PRINT_VERTEX_CREATION_WARNINGS:
                     print_debug(f"Vertex {vertex.name} is a deadlock vertex. A selfloop was added.")
+        for vertex_name in vertices:
+            if vertex_name != vertices[vertex_name].name:
+                print_error(
+                    f"Key {vertex_name} in vertices dictionary does not match vertex name {vertices[vertex_name].name}. This is needed for the SSG to work correctly.")
+        for transition_key in transitions:
+            if transition_key[0] is not transitions[transition_key].start_vertex:
+                print_error(
+                    f"Key {transition_key[0]} in transitions dictionary does not match transition start vertex {transitions[transition_key].start_vertex}. This is needed for the SSG to work correctly.")
+            if transition_key[1] != transitions[transition_key].action:
+                print_error(
+                    f"Key {transition_key[1]} in transitions dictionary does not match transition action {transitions[transition_key].action}. This is needed for the SSG to work correctly.")
 
     def add_extra_vert(self, is_eve: bool, is_target: bool = False) -> SsgVertex:
         """

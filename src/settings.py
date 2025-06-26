@@ -4,7 +4,7 @@ import subprocess
 from path_conversion import windows_to_linux_path
 from error_handling import print_error
 
-USE_EXACT_ARITHMETIC = True  # If True, replaces floats with exact arithmetic (fractions), default is True
+USE_EXACT_ARITHMETIC = False  # If True, replaces floats with exact arithmetic (fractions), default is True
 MAX_DENOMINATOR = 2147483647  # 2,147,483,647 is the optimal value for PRISM-games
 
 GLOBAL_IN_OUT_PATH_LINUX = ""  # only assign if the OS is Linux, otherwise it will be set to GLOBAL_IN_OUT_PATH_WINDOWS

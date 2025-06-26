@@ -344,12 +344,14 @@ def sanity_check_alternating_vertices(ssg: SimpleStochasticGame) -> bool:
     return True
 
 
-def check_property(smg_file, property_string, use_global_path: bool = False, debug: bool = GLOBAL_DEBUG, prism_path: str = PRISM_PATH, max_iters: int = MAX_ITERS, prism_epsilon: float = PRISM_EPSILON, prism_solving_algorithm: str = PRISM_SOLVING_ALGORITHM) -> float:
+def check_property(smg_file, property_string, use_global_path: bool = False, strategy_filename: str = None, debug: bool = GLOBAL_DEBUG, prism_path: str = PRISM_PATH, max_iters: int = MAX_ITERS, prism_epsilon: float = PRISM_EPSILON, prism_solving_algorithm: str = PRISM_SOLVING_ALGORITHM) -> float:
     if debug:
         start_time = time.perf_counter()
     if use_global_path:
         smg_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, smg_file)
-    command = f"{sh_escape(prism_path)} {sh_escape(smg_file)} -pf {sh_escape(property_string)} -maxiters {str(max_iters)} -epsilon {str(prism_epsilon)} {sh_escape(prism_solving_algorithm)}"
+        strategy_filename = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, strategy_filename) if strategy_filename else None
+    strategy_export = f" -exportstrat {sh_escape(strategy_filename)}" if strategy_filename is not None else ""
+    command = f"{sh_escape(prism_path)} {sh_escape(smg_file)} -pf {sh_escape(property_string)} -maxiters {str(max_iters)} -epsilon {str(prism_epsilon)} {sh_escape(prism_solving_algorithm)}{strategy_export}" + (":type=actions" if strategy_filename is not None else "")
     result = run_command_linux(command=command, use_shell=True, debug=debug)
     output = result.stdout
     match = re.search(r'Result:\s*(\d\.\d+(E-\d+)?)', output)
@@ -364,14 +366,19 @@ def check_property(smg_file, property_string, use_global_path: bool = False, deb
         return -1.0
 
 
-def check_target_reachability(smg_file: str, print_probabilities: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False, prism_path: str = PRISM_PATH, max_iters: int = MAX_ITERS, prism_epsilon: float = PRISM_EPSILON, prism_solving_algorithm: str = PRISM_SOLVING_ALGORITHM) -> tuple[float, float]:
+def check_target_reachability(smg_file: str, print_probabilities: bool = False, export_strategies: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False, prism_path: str = PRISM_PATH, max_iters: int = MAX_ITERS, prism_epsilon: float = PRISM_EPSILON, prism_solving_algorithm: str = PRISM_SOLVING_ALGORITHM) -> tuple[float, float]:
     if debug:
         start_time = time.perf_counter()
     if use_global_path:
         smg_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, smg_file)
     if debug:
         pre_prob1_time = time.perf_counter()
-    result1 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmin=? [F \"target\"]", debug=debug, prism_path=prism_path, max_iters=max_iters, prism_epsilon=prism_epsilon, prism_solving_algorithm=prism_solving_algorithm)
+    strategie_filename = None
+    if export_strategies:
+        strategie_filename = "strat1.txt"
+        if use_global_path:
+            strategie_filename = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, strategie_filename)
+    result1 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmin=? [F \"target\"]", strategy_filename=strategie_filename, debug=debug, prism_path=prism_path, max_iters=max_iters, prism_epsilon=prism_epsilon, prism_solving_algorithm=prism_solving_algorithm)
     if debug:
         print_debug(f"First prob checking time: {(time.perf_counter() - pre_prob1_time):.6f}")
     if result1 == -1.0:
@@ -380,6 +387,11 @@ def check_target_reachability(smg_file: str, print_probabilities: bool = False, 
         result = f"Minimum probability of reaching a target state for eve: {str(result1)}\n"
     if debug:
         pre_prob2_time = time.perf_counter()
+    strategie_filename = None
+    if export_strategies:
+        strategie_filename = "strat2.txt"
+        if use_global_path:
+            strategie_filename = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, strategie_filename)
     result2 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmax=? [F \"target\"]", debug=debug)
     if debug:
         print_debug(f"Second prob checking time: {(time.perf_counter() - pre_prob2_time):.6f}")
