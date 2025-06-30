@@ -4,6 +4,7 @@ import random
 import time
 import json
 import os
+import psutil
 
 from pympler import asizeof
 from multiprocessing import Process, Manager
@@ -73,6 +74,7 @@ def create_small_mutex_spg() -> StochasticParityGame:
     }
     initial_vertex = vertices["start"]
     return StochasticParityGame(vertices=vertices, transitions=transitions, init_vertex=initial_vertex)
+
 
 def create_mutex_spg() -> StochasticParityGame:
     """
@@ -417,14 +419,21 @@ def create_random_spg(number_of_vertices: int, number_of_outgoing_transitions: i
     transitions = {}
     for vertex in vertices.values():
         for i in range(number_of_outgoing_transitions):
-            if random.randint(0, 1) == 1:
-                transitions[(vertex, f"action_{i}")] = SpgTransition(start_vertex=vertex, end_vertices={(1.0, random.choice(list(vertices.values())))}, action=f"action_{i}")
-            else:
+            if i == 0:
                 random_vertex1 = random.choice(list(vertices.values()))
                 random_vertex2 = random.choice(list(vertices.values()))
                 while random_vertex2 == random_vertex1:
                     random_vertex2 = random.choice(list(vertices.values()))
                 transitions[(vertex, f"action_{i}")] = SpgTransition(start_vertex=vertex, end_vertices={(0.5, random_vertex1), (0.5, random_vertex2)}, action=f"action_{i}")
+            else:
+                if random.randint(0, 1) == 1:
+                    transitions[(vertex, f"action_{i}")] = SpgTransition(start_vertex=vertex, end_vertices={(1.0, random.choice(list(vertices.values())))}, action=f"action_{i}")
+                else:
+                    random_vertex1 = random.choice(list(vertices.values()))
+                    random_vertex2 = random.choice(list(vertices.values()))
+                    while random_vertex2 == random_vertex1:
+                        random_vertex2 = random.choice(list(vertices.values()))
+                    transitions[(vertex, f"action_{i}")] = SpgTransition(start_vertex=vertex, end_vertices={(0.5, random_vertex1), (0.5, random_vertex2)}, action=f"action_{i}")
     initial_vertex = random.choice(list(vertices.values()))
     return StochasticParityGame(vertices, transitions, initial_vertex)
 
@@ -511,7 +520,7 @@ def benchmark_mutex_spg_for_correctness(use_global_path: bool = False, debug: bo
     print()
 
 
-def _iteration_worker(q, method_with_args):
+def _iteration_worker(q, method_with_args, debug: bool = GLOBAL_DEBUG):
     """
     Worker function for running a method with arguments in a separate process.
     :param q: Queue for communication between processes
@@ -519,11 +528,21 @@ def _iteration_worker(q, method_with_args):
     :param method_with_args: Method and its arguments to be executed
     :type method_with_args: tuple[callable, tuple]
     """
+    if debug:
+        import traceback
+        print("[Worker] Starte Subprozess...")
     method, args = method_with_args
     try:
+        if debug:
+            print(f"[Worker] Methode: {method.__name__}, args: {args}")
         result = method(*args)
+        if debug:
+            print("[Worker] Ergebnis erfolgreich erhalten.")
         q.put(result)
     except Exception as e:
+        if debug:
+            print("[Worker] Ausnahme aufgetreten:", e)
+            traceback.print_exc()
         q.put(e)
 
 
@@ -546,7 +565,7 @@ def benchmark_frozen_lake(timeout: int = 3600, abort_when_alpha_underflow: bool 
         for size in range(5, 11):
             q = manager.Queue()
 
-            p = Process(target=_iteration_worker, args=(q, (create_frozen_lake_spg, (size, size, None, None, 0.1, 0.5, 0.5))))
+            p = Process(target=_iteration_worker, args=(q, (create_frozen_lake_spg, (size, size, None, None, 0.1, 0.5, 0.5)), debug))
             start_time = time.perf_counter()
             if debug:
                 print_debug(f"Start creating frozen lake benchmark for size {size} by {size}...")
@@ -557,7 +576,7 @@ def benchmark_frozen_lake(timeout: int = 3600, abort_when_alpha_underflow: bool 
             if p.is_alive():
                 if debug:
                     print_debug(f"Timeout of {timeout} seconds reached for frozen lake creation with size {size} by {size}.")
-                p.terminate()
+                kill_process_and_children(p.pid)
                 p.join()
             try:
                 result = q.get(timeout=5)
@@ -576,7 +595,7 @@ def benchmark_frozen_lake(timeout: int = 3600, abort_when_alpha_underflow: bool 
             spg = result
 
             q = manager.Queue()
-            p = Process(target=_iteration_worker, args=(q, (spg_to_ssg, (spg, 1e-6, True))))
+            p = Process(target=_iteration_worker, args=(q, (spg_to_ssg, (spg, 1e-6, True)), debug))
             start_time = time.perf_counter()
             if debug:
                 print_debug(f"Start transforming frozen lake benchmark for size {size} by {size} to SSG...")
@@ -587,7 +606,7 @@ def benchmark_frozen_lake(timeout: int = 3600, abort_when_alpha_underflow: bool 
             if p.is_alive():
                 if debug:
                     print_debug(f"Timeout of {timeout} seconds reached for transforming frozen lake with size {size} by {size}.")
-                p.terminate()
+                kill_process_and_children(p.pid)
                 p.join()
             try:
                 result = q.get(timeout=5)
@@ -610,7 +629,7 @@ def benchmark_frozen_lake(timeout: int = 3600, abort_when_alpha_underflow: bool 
                     break
 
             q = manager.Queue()
-            p = Process(target=_iteration_worker, args=(q, (ssg_to_smgspec, (ssg, True, True, False))))
+            p = Process(target=_iteration_worker, args=(q, (ssg_to_smgspec, (ssg, True, True, False)), debug))
             start_time = time.perf_counter()
             if debug:
                 print_debug(f"Start transforming frozen lake benchmark for size {size} by {size} to SMG...")
@@ -621,7 +640,7 @@ def benchmark_frozen_lake(timeout: int = 3600, abort_when_alpha_underflow: bool 
             if p.is_alive():
                 if debug:
                     print_debug(f"Timeout of {timeout} seconds reached for transforming frozen lake with size {size} by {size}.")
-                p.terminate()
+                kill_process_and_children(p.pid)
                 p.join()
             try:
                 result = q.get(timeout=5)
@@ -641,7 +660,7 @@ def benchmark_frozen_lake(timeout: int = 3600, abort_when_alpha_underflow: bool 
             save_smg_file(content=smgspec, file_name=f"temp.smg", use_global_path=use_global_path, force=True)
 
             q = manager.Queue()
-            p = Process(target=_iteration_worker, args=(q, (check_property, ("temp.smg", "<<eve>> Pmin=? [F \"target\"]", use_global_path, None, False))))
+            p = Process(target=_iteration_worker, args=(q, (check_property, ("temp.smg", "<<eve>> Pmin=? [F \"target\"]", use_global_path, None, False)), debug))
             start_time = time.perf_counter()
             if debug:
                 print_debug(f"Start checking first target reachability property of frozen lake benchmark for size {size} by {size}...")
@@ -652,7 +671,7 @@ def benchmark_frozen_lake(timeout: int = 3600, abort_when_alpha_underflow: bool 
             if p.is_alive():
                 if debug:
                     print_debug(f"Timeout of {timeout} seconds reached for checking frozen lake with size {size} by {size}.")
-                p.terminate()
+                kill_process_and_children(p.pid)
                 p.join()
             try:
                 result = q.get(timeout=5)
@@ -670,7 +689,7 @@ def benchmark_frozen_lake(timeout: int = 3600, abort_when_alpha_underflow: bool 
             print(f"Probability of Eve winning when trying to lose: {result1}")
 
             q = manager.Queue()
-            p = Process(target=_iteration_worker, args=(q, (check_property, ("temp.smg", "<<eve>> Pmax=? [F \"target\"]", use_global_path, None, False))))
+            p = Process(target=_iteration_worker, args=(q, (check_property, ("temp.smg", "<<eve>> Pmax=? [F \"target\"]", use_global_path, None, False)), debug))
             start_time = time.perf_counter()
             if debug:
                 print_debug(f"Start checking second target reachability property of frozen lake benchmark for size {size} by {size}...")
@@ -681,7 +700,7 @@ def benchmark_frozen_lake(timeout: int = 3600, abort_when_alpha_underflow: bool 
             if p.is_alive():
                 if debug:
                     print_debug(f"Timeout of {timeout} seconds reached for checking frozen lake with size {size} by {size}.")
-                p.terminate()
+                kill_process_and_children(p.pid)
                 p.join()
             try:
                 result = q.get(timeout=5)
@@ -720,6 +739,16 @@ def nested_to_tuples(data, prefix=()):
     return results
 
 
+def kill_process_and_children(pid):
+    try:
+        parent = psutil.Process(pid)
+        for child in parent.children(recursive=True):
+            child.kill()
+        parent.kill()
+    except psutil.NoSuchProcess:
+        pass
+
+
 def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_transitions: list[float], number_of_priorities: list[int], spg_transformation_epsilon: list[float], prism_algorithm: list[str], timeout: int = 3600, abort_when_alpha_underflow=True, use_global_path=False, save_results: bool = True, debug=True) -> dict:
     """
     Benchmarks the creation and transformation of random SPGs and the solving of target reachability properties.
@@ -748,22 +777,24 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
     """
     print(f"###Benchmarking {len(number_of_vertices) * len(share_of_outgoing_transitions) * len(number_of_priorities) * len(spg_transformation_epsilon) * len(prism_algorithm)} random SPGs" + (" that are saved to random_ssg_results.json" if save_results else " without saving results") + "###")
     benchmark_results = dict()
-    result_path = "random_ssg_results.json" if not use_global_path else os.path.join(GLOBAL_IN_OUT_PATH, "random_ssg_results.json")
-    if os.path.exists(result_path):
-        with open(result_path, "r") as f:
-            benchmark_results = json.load(f)
-            benchmark_results = nested_to_tuples(benchmark_results)
+    if save_results:
+        result_path = "random_ssg_results.json" if not use_global_path else os.path.join(GLOBAL_IN_OUT_PATH, "random_ssg_results.json")
+        if os.path.exists(result_path):
+            with open(result_path, "r") as f:
+                benchmark_results = json.load(f)
+                benchmark_results = nested_to_tuples(benchmark_results)
     with Manager() as manager:
         for n_of_vertices in number_of_vertices:
             for s_of_transitions in share_of_outgoing_transitions:
                 for n_of_priorities in number_of_priorities:
                     for epsilon in spg_transformation_epsilon:
                         for algorithm in prism_algorithm:
+
                             print(f"#####Vertices : {n_of_vertices} || Share of transitions: {s_of_transitions} || Priorities: {n_of_priorities} || Epsilon: {epsilon} || Algorithm: {algorithm}")
                             q = manager.Queue()
 
                             p = Process(target=_iteration_worker,
-                                        args=(q, (create_random_spg, (n_of_vertices, max(1, int(s_of_transitions * n_of_vertices)), n_of_priorities))))
+                                        args=(q, (create_random_spg, (n_of_vertices, max(1, int(s_of_transitions * n_of_vertices)), n_of_priorities)), debug))
                             start_time = time.perf_counter()
                             if debug:
                                 print_debug(f"Start creating random SPG for {n_of_vertices} vertices, {max(1, int(s_of_transitions * n_of_vertices))} outgoing transitions and {n_of_priorities} priorities...")
@@ -773,9 +804,8 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
 
                             if p.is_alive():
                                 if debug:
-                                    print_debug(
-                                        f"Timeout of {timeout} seconds reached for creating random SPG for {n_of_vertices} vertices, {max(1, int(s_of_transitions * n_of_vertices))} outgoing transitions and {n_of_priorities} priorities.")
-                                p.terminate()
+                                    print_debug(f"Timeout of {timeout} seconds reached for creating random SPG for {n_of_vertices} vertices, {max(1, int(s_of_transitions * n_of_vertices))} outgoing transitions and {n_of_priorities} priorities.")
+                                kill_process_and_children(p.pid)
                                 p.join()
                                 benchmark_results[(str(n_of_vertices), str(s_of_transitions), str(n_of_priorities), str(epsilon), str(algorithm), "spg_creation_time")] = -1.0
                                 benchmark_results[(str(n_of_vertices), str(s_of_transitions), str(n_of_priorities), str(epsilon), str(algorithm), "spg_size")] = -1
@@ -805,7 +835,6 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
                                 benchmark_results[(str(n_of_vertices), str(s_of_transitions), str(n_of_priorities), str(epsilon), str(algorithm), "property_check_time_2")] = -1.0
                                 continue
 
-
                             if isinstance(result, Exception):
                                 print(f"Subprocess failed with exception: {result}")
                                 benchmark_results[(str(n_of_vertices), str(s_of_transitions), str(n_of_priorities), str(epsilon), str(algorithm), "spg_creation_time")] = -1.0
@@ -821,7 +850,7 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
                             spg = result
 
                             q = manager.Queue()
-                            p = Process(target=_iteration_worker, args=(q, (spg_to_ssg, (spg, epsilon, True))))
+                            p = Process(target=_iteration_worker, args=(q, (spg_to_ssg, (spg, epsilon, True)), debug))
                             start_time = time.perf_counter()
                             if debug:
                                 print_debug(f"Start transforming random spg for {n_of_vertices} vertices, {max(1, int(s_of_transitions * n_of_vertices))} outgoing transitions and {n_of_priorities} priorities to SSG...")
@@ -833,7 +862,7 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
                                 if debug:
                                     print_debug(
                                         f"Timeout of {timeout} seconds reached for transforming random spg with {n_of_vertices} vertices, {max(1, int(s_of_transitions * n_of_vertices))} outgoing transitions and {n_of_priorities} priorities to SSG.")
-                                p.terminate()
+                                kill_process_and_children(p.pid)
                                 p.join()
                                 benchmark_results[(str(n_of_vertices), str(s_of_transitions), str(n_of_priorities), str(epsilon), str(algorithm), "ssg_transformation_time")] = -1.0
                                 benchmark_results[(str(n_of_vertices), str(s_of_transitions), str(n_of_priorities), str(epsilon), str(algorithm), "ssg_size")] = -1
@@ -882,7 +911,7 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
                                     continue
 
                             q = manager.Queue()
-                            p = Process(target=_iteration_worker, args=(q, (ssg_to_smgspec, (ssg, True, True, False))))
+                            p = Process(target=_iteration_worker, args=(q, (ssg_to_smgspec, (ssg, True, True, False)), debug))
                             start_time = time.perf_counter()
                             if debug:
                                 print_debug(f"Start transforming random spg for {n_of_vertices} vertices, {max(1, int(s_of_transitions * n_of_vertices))} outgoing transitions and {n_of_priorities} priorities to SMG...")
@@ -894,7 +923,7 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
                                 if debug:
                                     print_debug(
                                         f"Timeout of {timeout} seconds reached for transforming random spg with {n_of_vertices} vertices, {max(1, int(s_of_transitions * n_of_vertices))} outgoing transitions and {n_of_priorities} priorities to SMG.")
-                                p.terminate()
+                                kill_process_and_children(p.pid)
                                 p.join()
                                 benchmark_results[(str(n_of_vertices), str(s_of_transitions), str(n_of_priorities), str(epsilon), str(algorithm), "smg_transformation_time")] = -1.0
                                 benchmark_results[(str(n_of_vertices), str(s_of_transitions), str(n_of_priorities), str(epsilon), str(algorithm), "smg_size")] = -1
@@ -928,7 +957,7 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
                             save_smg_file(content=smgspec, file_name=f"temp.smg", use_global_path=use_global_path, force=True)
 
                             q = manager.Queue()
-                            p = Process(target=_iteration_worker, args=(q, (check_property, ("temp.smg", "<<eve>> Pmin=? [F \"target\"]", use_global_path, None, False, PRISM_PATH, MAX_ITERS, PRISM_EPSILON, algorithm))))
+                            p = Process(target=_iteration_worker, args=(q, (check_property, ("temp.smg", "<<eve>> Pmin=? [F \"target\"]", use_global_path, None, False, PRISM_PATH, MAX_ITERS, PRISM_EPSILON, algorithm)), debug))
                             start_time = time.perf_counter()
                             if debug:
                                 print_debug(f"Start checking first target reachability property for random spg for {n_of_vertices} vertices, {max(1, int(s_of_transitions * n_of_vertices))} outgoing transitions and {n_of_priorities} priorities...")
@@ -940,7 +969,7 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
                                 if debug:
                                     print_debug(
                                         f"Timeout of {timeout} seconds reached for checking first target reachability property for random spg with {n_of_vertices} vertices, {max(1, int(s_of_transitions * n_of_vertices))} outgoing transitions and {n_of_priorities} priorities.")
-                                p.terminate()
+                                kill_process_and_children(p.pid)
                                 p.join()
                                 benchmark_results[(str(n_of_vertices), str(s_of_transitions), str(n_of_priorities), str(epsilon), str(algorithm), "property_check_time_1")] = -1.0
                                 check_worked = False
@@ -961,7 +990,7 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
                                         benchmark_results[(str(n_of_vertices), str(s_of_transitions), str(n_of_priorities), str(epsilon), str(algorithm), "property_check_time_1")] = -1.0
 
                             q = manager.Queue()
-                            p = Process(target=_iteration_worker, args=(q, (check_property, ("temp.smg", "<<eve>> Pmax=? [F \"target\"]", use_global_path, None, False, PRISM_PATH, MAX_ITERS, PRISM_EPSILON, algorithm))))
+                            p = Process(target=_iteration_worker, args=(q, (check_property, ("temp.smg", "<<eve>> Pmax=? [F \"target\"]", use_global_path, None, False, PRISM_PATH, MAX_ITERS, PRISM_EPSILON, algorithm)), debug))
 
                             start_time = time.perf_counter()
                             if debug:
@@ -975,14 +1004,14 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
                                 if debug:
                                     print_debug(
                                         f"Timeout of {timeout} seconds reached for checking first target reachability property for random spg with {n_of_vertices} vertices, {max(1, int(s_of_transitions * n_of_vertices))} outgoing transitions and {n_of_priorities} priorities.")
-                                p.terminate()
+                                kill_process_and_children(p.pid)
                                 p.join()
                                 benchmark_results[(str(n_of_vertices), str(s_of_transitions), str(n_of_priorities), str(epsilon), str(algorithm), "property_check_time_2")] = -1.0
                                 continue
                             try:
                                 result = q.get(timeout=5)
                                 print(
-                                    f"Checking first target reachability property for random spg with {n_of_vertices} vertices, {max(1, int(s_of_transitions * n_of_vertices))} outgoing transitions and {n_of_priorities} priorities took {end_time - start_time:.2f} seconds.")
+                                    f"Checking second target reachability property for random spg with {n_of_vertices} vertices, {max(1, int(s_of_transitions * n_of_vertices))} outgoing transitions and {n_of_priorities} priorities took {end_time - start_time:.2f} seconds.")
                                 benchmark_results[(str(n_of_vertices), str(s_of_transitions), str(n_of_priorities), str(epsilon), str(algorithm), "property_check_time_2")] = end_time - start_time
                             except pyqueue.Empty:
                                 print(
@@ -995,12 +1024,14 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
                                 benchmark_results[(str(n_of_vertices), str(s_of_transitions), str(n_of_priorities), str(epsilon), str(algorithm), "property_check_time_2")] = -1.0
                                 continue
 
-                            with open(result_path, "w") as f:
-                                nested = dict_from_tuples(benchmark_results)
-                                json.dump(nested, f, indent=4)
-    with open(result_path, "w") as f:
-        nested = dict_from_tuples(benchmark_results)
-        json.dump(nested, f, indent=4)
+                            if save_results:
+                                with open(result_path, "w") as f:
+                                    nested = dict_from_tuples(benchmark_results)
+                                    json.dump(nested, f, indent=4)
+    if save_results:
+        with open(result_path, "w") as f:
+            nested = dict_from_tuples(benchmark_results)
+            json.dump(nested, f, indent=4)
     return benchmark_results
 
 
@@ -1011,7 +1042,7 @@ def main():
     number_of_priorities = [2, 8, 32]
     spg_transformation_epsilon = [None, 1e-100, 1e-20, 1e-10, 1e-6, 1e-1]
     prism_algorithm = ["-valiter", "-politer", "-intervaliter"]
-    res = benchmark_random_spgs(number_of_vertices, share_of_outgoing_transitions, number_of_priorities, spg_transformation_epsilon, prism_algorithm, timeout=60, abort_when_alpha_underflow=False, use_global_path=True, debug=True)
+    res = benchmark_random_spgs(number_of_vertices, share_of_outgoing_transitions, number_of_priorities, spg_transformation_epsilon, prism_algorithm, timeout=600, abort_when_alpha_underflow=False, use_global_path=True, debug=True, save_results=True)
 
     print()
     """spg = create_frozen_lake_spg(columns=2, rows=2, point0=(0, 0), point1=(0, 1), share_of_holes=0)
