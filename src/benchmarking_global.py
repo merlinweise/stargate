@@ -1037,11 +1037,11 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
 
 def main():
     """# benchmark_frozen_lake(3600, False, use_global_path=True, debug=True)"""
-    number_of_vertices = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+    number_of_vertices = [2, 3, 8, 15, 32, 63, 128, 255, 512, 1023]
     share_of_outgoing_transitions = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0]
     number_of_priorities = [2, 8, 32]
     spg_transformation_epsilon = [None, 1e-100, 1e-20, 1e-10, 1e-6, 1e-1]
-    prism_algorithm = ["-valiter", "-politer", "-intervaliter"]
+    prism_algorithm = ["-valiter", "-politer"]
     res = benchmark_random_spgs(number_of_vertices, share_of_outgoing_transitions, number_of_priorities, spg_transformation_epsilon, prism_algorithm, timeout=600, abort_when_alpha_underflow=False, use_global_path=True, debug=True, save_results=True)
 
     print()
