@@ -21,6 +21,8 @@ class SpgVertex:
         """
         self.name = name
         self.is_eve = is_eve
+        if priority < 0:
+            print_error(f"Priority {priority} of vertex {name} is negative. This is not allowed.")
         self.priority = priority
 
     def __str__(self):
