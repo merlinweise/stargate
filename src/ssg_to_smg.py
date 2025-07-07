@@ -11,7 +11,7 @@ from error_handling import print_warning, print_debug
 from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_LINUX, PRISM_PATH, MAX_ITERS, PRISM_EPSILON, PRISM_SOLVING_ALGORITHM, GLOBAL_IN_OUT_PATH, IS_OS_LINUX
 
 
-def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = False, debug: bool = GLOBAL_DEBUG, print_correspondingvertices: bool = False) -> str:
+def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = True, debug: bool = GLOBAL_DEBUG, print_correspondingvertices: bool = False) -> str:
     if debug:
         start_time = time.perf_counter()
     content = "smg\n\n"
