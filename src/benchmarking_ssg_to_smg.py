@@ -388,7 +388,7 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, save
             ssg_i = create_empty_ssg(size_param)
 
         start_v1 = time.perf_counter()
-        smg_v1 = ssg_to_smgspec(ssg_i, version1=True)
+        smg_v1 = ssg_to_smgspec(ssg_i, version=1)
         trans_v1_time = time.perf_counter() - start_v1
         save_smg_file(smg_v1, f"ssg_{i+1}_v1.smg", use_global_path=True, force=True)
         start_v1_prop = time.perf_counter()
@@ -397,7 +397,7 @@ def benchmark_multiple_ssgs(ssg_count: int, ssg_type: str, size_param: int, save
         vert_v1, trans_v1, build_time1 = check_smg_stats(f"ssg_{i + 1}_v1.smg", use_global_path=True)
 
         start_v2 = time.perf_counter()
-        smg_v2 = ssg_to_smgspec(ssg_i, version1=False)
+        smg_v2 = ssg_to_smgspec(ssg_i, version=3)
         trans_v2_time = time.perf_counter() - start_v2
         save_smg_file(smg_v2, f"ssg_{i+1}_v2.smg", use_global_path=True, force=True)
         start_v2_prop = time.perf_counter()
@@ -484,7 +484,7 @@ def single_iteration_for_exponential_benchmark(ssg_type: str, i: int, use_global
         ssg_i = create_empty_ssg(size_param)
 
     start_v1 = time.perf_counter()
-    smg_v1 = ssg_to_smgspec(ssg_i, version1=True)
+    smg_v1 = ssg_to_smgspec(ssg_i, version=1)
     trans_v1_time = time.perf_counter() - start_v1
     save_smg_file(smg_v1, f"ssg_{i + 1}_v1.smg", use_global_path=use_global_path, force=True)
     start_v1_prop = time.perf_counter()
@@ -493,7 +493,7 @@ def single_iteration_for_exponential_benchmark(ssg_type: str, i: int, use_global
     vert_v1, trans_v1, build_time1 = check_smg_stats(f"ssg_{i + 1}_v1.smg", use_global_path=use_global_path)
 
     start_v2 = time.perf_counter()
-    smg_v2 = ssg_to_smgspec(ssg_i, version1=False)
+    smg_v2 = ssg_to_smgspec(ssg_i, version=2)
     trans_v2_time = time.perf_counter() - start_v2
     save_smg_file(smg_v2, f"ssg_{i + 1}_v2.smg", use_global_path=use_global_path, force=True)
     start_v2_prop = time.perf_counter()

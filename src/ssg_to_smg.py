@@ -8,14 +8,14 @@ from path_conversion import windows_to_linux_path, linux_to_windows_path, is_lin
 from simplestochasticgame import SimpleStochasticGame, SsgTransition, SsgVertex, has_transition_end_vertex, create_extra_vert
 from shell_commands import run_command, sh_escape, run_command_linux
 from error_handling import print_warning, print_debug
-from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_LINUX, PRISM_PATH, MAX_ITERS, PRISM_EPSILON, PRISM_SOLVING_ALGORITHM, GLOBAL_IN_OUT_PATH, IS_OS_LINUX, SSG_TO_SMG_NEW_VERSION_1
+from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_LINUX, PRISM_PATH, MAX_ITERS, PRISM_EPSILON, PRISM_SOLVING_ALGORITHM, GLOBAL_IN_OUT_PATH, IS_OS_LINUX, SSG_TO_SMG_VERSION
 
 
-def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = True, debug: bool = GLOBAL_DEBUG, print_correspondingvertices: bool = False) -> str:
+def ssg_to_smgspec(ssg: SimpleStochasticGame, version: int = SSG_TO_SMG_VERSION, debug: bool = GLOBAL_DEBUG, print_correspondingvertices: bool = False) -> str:
     if debug:
         start_time = time.perf_counter()
     content = "smg\n\n"
-    if version1:
+    if version == 1 or version == 2:
         ssg = copy.deepcopy(ssg)
         i = 1
         while True:
@@ -31,8 +31,8 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = True, debug: bool
             else:
                 extra_adam_act = f"extra_adam_action{i}"
                 break
-        if SSG_TO_SMG_NEW_VERSION_1:
-            # new version with new vertex for every vertex
+        if version == 1:
+            # new version (1) with new vertex for every vertex
             intermediate_vertices: dict[SsgVertex, SsgVertex] = dict()
             for vertex in ssg.vertices.values():
                 if vertex.is_eve:
@@ -85,7 +85,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = True, debug: bool
                         additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, new_end_verts, transition.action))
 
         else:
-            # older version with new vertex for every transition
+            # older version (2) with new vertex for every transition
             additional_ssg_transitions = dict()
             for transition in ssg.transitions.values():
                 if len(transition.end_vertices) == 1:
@@ -208,6 +208,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = True, debug: bool
                 adam_mod += f"\t[{new_adam_actions[transition.action]}] (es={new_transitions[transition][0][0]} & as={new_transitions[transition][0][1]}) \t-> (as'=0) ;\n"
         content += eve_mod + "endmodule\n\n" + adam_mod + "endmodule"
     else:
+        # synchronous version (3)
         new_vertices: dict[SsgVertex, tuple[int, int]] = dict()
         ssg_eve_actions: set[str] = set()
         ssg_adam_actions: set[str] = set()
@@ -313,7 +314,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = True, debug: bool
     content += "\n\nlabel \"target\" = ("
     for vertex in ssg.vertices.values():
         if vertex.is_target:
-            if version1:
+            if version:
                 content += f"(es={new_vertices[vertex][0]}) & (as={new_vertices[vertex][1]}) | "
             else:
                 content += f"(e1={new_vertices[vertex][0]}) & (e2={new_vertices[vertex][1]}) | "
@@ -322,7 +323,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = True, debug: bool
     else:
         content = content[:-3] + ");"
     if debug:
-        print_debug(f"SMG specification created in {(time.perf_counter() - start_time):.6f} seconds with version {1 if version1 else 2}")
+        print_debug(f"SMG specification created in {(time.perf_counter() - start_time):.6f} seconds with version {1 if version else 2}")
     return content
 
 

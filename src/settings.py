@@ -6,7 +6,7 @@ from error_handling import print_error
 
 USE_EXACT_ARITHMETIC = False  # If True, replaces floats with exact arithmetic (fractions), default is True
 MAX_DENOMINATOR = 2147483647  # 2,147,483,647 is the optimal value for PRISM-games
-SSG_TO_SMG_NEW_VERSION_1 = True  # If True, uses the new version 1 of the SSG to SMG conversion algorithm, default is True
+SSG_TO_SMG_VERSION = 1  # 1: Performant alternating version, 2: Older alternating version, 3: Synchronous version, default is 1
 
 GLOBAL_IN_OUT_PATH_LINUX = ""  # only assign if the OS is Linux, otherwise it will be set to GLOBAL_IN_OUT_PATH_WINDOWS
 GLOBAL_IN_OUT_PATH_WINDOWS = "C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\PRISMgames_testing\\program_in_and_out"  # only assign if the OS is Windows, otherwise it will be set to GLOBAL_IN_OUT_PATH_LINUX

@@ -438,7 +438,7 @@ def create_random_spg(number_of_vertices: int, number_of_outgoing_transitions: i
     return StochasticParityGame(vertices, transitions, initial_vertex)
 
 
-def benchmark_own_examples_for_correctness(filenames_of_benchmarks: list[str], expected_values: list[tuple[float, float]], use_global_path=False, debug: bool = False) -> None:
+def benchmark_own_examples_for_correctness(filenames_of_benchmarks: list[str], expected_values: list[tuple[float, float]], use_global_path: bool = False, debug: bool = False) -> None:
     """
     Benchmarks own examples for correctness by comparing the expected values with the computed results.
     :param filenames_of_benchmarks: List of filenames of benchmark files
@@ -456,7 +456,7 @@ def benchmark_own_examples_for_correctness(filenames_of_benchmarks: list[str], e
     for filename in filenames_of_benchmarks:
         spg = read_spg_from_file(filename, use_global_path=use_global_path)
         ssg = spg_to_ssg(spg=spg, epsilon=1e-6, print_alphas=True)
-        smg_spec = ssg_to_smgspec(ssg=ssg, version1=True, debug=False, print_correspondingvertices=True)
+        smg_spec = ssg_to_smgspec(ssg=ssg, version=1, debug=False, print_correspondingvertices=debug)
         save_smg_file(smg_spec, file_name="temp.smg", use_global_path=use_global_path, force=True)
         result = check_target_reachability(smg_file="temp.smg", print_probabilities=False, use_global_path=use_global_path)
         print("####################################################################################")
@@ -481,7 +481,7 @@ def benchmark_chain_spgs_for_correctness(use_global_path: bool = False, debug: b
     for i in range(1, 20):
         spg = create_chain_spg(length=2 ** i, min_prob=0.5)
         ssg = spg_to_ssg(spg=spg, epsilon=1e-6, print_alphas=debug)
-        smg_spec = ssg_to_smgspec(ssg=ssg, version1=True, debug=False, print_correspondingvertices=False)
+        smg_spec = ssg_to_smgspec(ssg=ssg, version=1, debug=False, print_correspondingvertices=False)
         save_smg_file(smg_spec, file_name="temp.smg", use_global_path=use_global_path, force=True)
         result = check_target_reachability(smg_file="temp.smg", print_probabilities=False, use_global_path=use_global_path)
         print("####################################################################################")
@@ -504,7 +504,7 @@ def benchmark_mutex_spg_for_correctness(use_global_path: bool = False, debug: bo
     """
     spg = create_small_mutex_spg()
     ssg = spg_to_ssg(spg=spg, epsilon=1e-6, print_alphas=debug)
-    smg_spec = ssg_to_smgspec(ssg=ssg, version1=True, debug=False, print_correspondingvertices=True)
+    smg_spec = ssg_to_smgspec(ssg=ssg, version=1, debug=False, print_correspondingvertices=True)
     save_smg_file(smg_spec, file_name="temp.smg", use_global_path=use_global_path, force=True)
     from src.ssg_to_smg import create_dot_file, create_svg_file
     create_dot_file(smg_file="temp.smg", dot_file="temp.dot", use_global_path=use_global_path, force=True)
@@ -629,7 +629,7 @@ def benchmark_frozen_lake(timeout: int = 3600, abort_when_alpha_underflow: bool 
                     break
 
             q = manager.Queue()
-            p = Process(target=_iteration_worker, args=(q, (ssg_to_smgspec, (ssg, True, True, False)), debug))
+            p = Process(target=_iteration_worker, args=(q, (ssg_to_smgspec, (ssg, 1, True, False)), debug))
             start_time = time.perf_counter()
             if debug:
                 print_debug(f"Start transforming frozen lake benchmark for size {size} by {size} to SMG...")
@@ -1048,7 +1048,7 @@ def main():
     """spg = create_frozen_lake_spg(columns=2, rows=2, point0=(0, 0), point1=(0, 1), share_of_holes=0)
     # spg = create_chain_spg(length=10, min_prob=0.5)
     ssg = spg_to_ssg(spg=spg, epsilon=1e-6, print_alphas=True)
-    smg_spec = ssg_to_smgspec(ssg=ssg, version1=True, debug=False, print_correspondingvertices=True)
+    smg_spec = ssg_to_smgspec(ssg=ssg, version=1, debug=False, print_correspondingvertices=True)
     save_smg_file(content=smg_spec, file_name="temp.smg", use_global_path=True, force=True)
     from ssg_to_smg import create_dot_file, create_svg_file
     check_target_reachability("temp.smg", print_probabilities=True, export_strategies=False, use_global_path=True, prism_solving_algorithm="-politer")
