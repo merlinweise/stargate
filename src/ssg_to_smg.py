@@ -5,10 +5,10 @@ import re
 import posixpath
 
 from path_conversion import windows_to_linux_path, linux_to_windows_path, is_linux_path
-from simplestochasticgame import SimpleStochasticGame, SsgTransition, SsgVertex
+from simplestochasticgame import SimpleStochasticGame, SsgTransition, SsgVertex, has_transition_end_vertex, create_extra_vert
 from shell_commands import run_command, sh_escape, run_command_linux
 from error_handling import print_warning, print_debug
-from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_LINUX, PRISM_PATH, MAX_ITERS, PRISM_EPSILON, PRISM_SOLVING_ALGORITHM, GLOBAL_IN_OUT_PATH, IS_OS_LINUX
+from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_LINUX, PRISM_PATH, MAX_ITERS, PRISM_EPSILON, PRISM_SOLVING_ALGORITHM, GLOBAL_IN_OUT_PATH, IS_OS_LINUX, SSG_TO_SMG_NEW_VERSION_1
 
 
 def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = True, debug: bool = GLOBAL_DEBUG, print_correspondingvertices: bool = False) -> str:
@@ -31,42 +31,98 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version1: bool = True, debug: bool
             else:
                 extra_adam_act = f"extra_adam_action{i}"
                 break
-        additional_ssg_transitions = dict()
-        for transition in ssg.transitions.values():
-            if len(transition.end_vertices) == 1:
-                if transition.start_vertex == next(iter(transition.end_vertices))[1]:
-                    continue
-                elif transition.start_vertex.is_eve and next(iter(transition.end_vertices))[1].is_eve:
-                    new_trans_vert = ssg.add_extra_vert(False)
-                    additional_ssg_transitions[new_trans_vert, extra_adam_act] = SsgTransition(new_trans_vert, {(1.0, next(iter(transition.end_vertices))[1])}, extra_adam_act)
-                    additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, {(1.0, new_trans_vert)}, transition.action))
-                elif not transition.start_vertex.is_eve and not next(iter(transition.end_vertices))[1].is_eve:
-                    new_trans_vert = ssg.add_extra_vert(True)
-                    additional_ssg_transitions[new_trans_vert, extra_eve_act] = SsgTransition(new_trans_vert, {(1.0, next(iter(transition.end_vertices))[1])}, extra_eve_act)
-                    additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, {(1.0, new_trans_vert)}, transition.action))
-            else:
-                if transition.start_vertex.is_eve:
-                    new_trans_verts: dict[SsgVertex, SsgVertex] = dict()
-                    new_end_verts: set[tuple[float, SsgVertex]] = set()
-                    for prob, vert in transition.end_vertices:
-                        if vert.is_eve:
-                            new_trans_verts[vert] = ssg.add_extra_vert(False)
-                            additional_ssg_transitions[new_trans_verts[vert], extra_adam_act] = (SsgTransition(new_trans_verts[vert], {(1.0, vert)}, extra_adam_act))
-                            new_end_verts.add((prob, new_trans_verts[vert]))
-                        else:
-                            new_end_verts.add((prob, vert))
-                    additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, new_end_verts, transition.action))
+        if SSG_TO_SMG_NEW_VERSION_1:
+            # new version with new vertex for every vertex
+            intermediate_vertices: dict[SsgVertex, SsgVertex] = dict()
+            for vertex in ssg.vertices.values():
+                if vertex.is_eve:
+                    for transition in ssg.transitions.values():
+                        if transition.start_vertex.is_eve and has_transition_end_vertex(transition, vertex) and vertex not in intermediate_vertices and not (transition.start_vertex == vertex and len(transition.end_vertices) == 1):
+                            new_vert = create_extra_vert(set(ssg.vertices.values()) | set(intermediate_vertices.values()), False)
+                            intermediate_vertices[vertex] = new_vert
                 else:
-                    new_trans_verts: dict[SsgVertex, SsgVertex] = dict()
-                    new_end_verts: set[tuple[float, SsgVertex]] = set()
-                    for prob, vert in transition.end_vertices:
-                        if not vert.is_eve:
-                            new_trans_verts[vert] = ssg.add_extra_vert(True)
-                            additional_ssg_transitions[new_trans_verts[vert], extra_eve_act] = (SsgTransition(new_trans_verts[vert], {(1.0, vert)}, extra_eve_act))
-                            new_end_verts.add((prob, new_trans_verts[vert]))
-                        else:
-                            new_end_verts.add((prob, vert))
-                    additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, new_end_verts, transition.action))
+                    for transition in ssg.transitions.values():
+                        if not transition.start_vertex.is_eve and has_transition_end_vertex(transition, vertex) and vertex not in intermediate_vertices and not (transition.start_vertex == vertex and len(transition.end_vertices) == 1):
+                            new_vert = create_extra_vert(set(ssg.vertices.values()) | set(intermediate_vertices.values()), True)
+                            intermediate_vertices[vertex] = new_vert
+            for vertex in intermediate_vertices.values():
+                ssg.vertices[vertex.name] = vertex
+            additional_ssg_transitions = dict()
+            for transition in ssg.transitions.values():
+                if len(transition.end_vertices) == 1:
+                    if transition.start_vertex == next(iter(transition.end_vertices))[1]:
+                        continue
+                    elif transition.start_vertex.is_eve and next(iter(transition.end_vertices))[1].is_eve:
+                        new_trans_vert = intermediate_vertices[next(iter(transition.end_vertices))[1]]
+                        additional_ssg_transitions[new_trans_vert, extra_adam_act] = SsgTransition(new_trans_vert, {(1.0, next(iter(transition.end_vertices))[1])}, extra_adam_act)
+                        additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, {(1.0, new_trans_vert)}, transition.action))
+                    elif not transition.start_vertex.is_eve and not next(iter(transition.end_vertices))[1].is_eve:
+                        new_trans_vert = intermediate_vertices[next(iter(transition.end_vertices))[1]]
+                        additional_ssg_transitions[new_trans_vert, extra_eve_act] = SsgTransition(new_trans_vert, {(1.0, next(iter(transition.end_vertices))[1])}, extra_eve_act)
+                        additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, {(1.0, new_trans_vert)}, transition.action))
+                else:
+                    if transition.start_vertex.is_eve:
+                        new_trans_verts: dict[SsgVertex, SsgVertex] = dict()
+                        new_end_verts: set[tuple[float, SsgVertex]] = set()
+                        for prob, vert in transition.end_vertices:
+                            if vert.is_eve:
+                                new_trans_verts[vert] = intermediate_vertices[vert]
+                                additional_ssg_transitions[new_trans_verts[vert], extra_adam_act] = (SsgTransition(new_trans_verts[vert], {(1.0, vert)}, extra_adam_act))
+                                new_end_verts.add((prob, new_trans_verts[vert]))
+                            else:
+                                new_end_verts.add((prob, vert))
+                        additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, new_end_verts, transition.action))
+                    else:
+                        new_trans_verts: dict[SsgVertex, SsgVertex] = dict()
+                        new_end_verts: set[tuple[float, SsgVertex]] = set()
+                        for prob, vert in transition.end_vertices:
+                            if not vert.is_eve:
+                                new_trans_verts[vert] = intermediate_vertices[vert]
+                                additional_ssg_transitions[new_trans_verts[vert], extra_eve_act] = (SsgTransition(new_trans_verts[vert], {(1.0, vert)}, extra_eve_act))
+                                new_end_verts.add((prob, new_trans_verts[vert]))
+                            else:
+                                new_end_verts.add((prob, vert))
+                        additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, new_end_verts, transition.action))
+
+        else:
+            # older version with new vertex for every transition
+            additional_ssg_transitions = dict()
+            for transition in ssg.transitions.values():
+                if len(transition.end_vertices) == 1:
+                    if transition.start_vertex == next(iter(transition.end_vertices))[1]:
+                        continue
+                    elif transition.start_vertex.is_eve and next(iter(transition.end_vertices))[1].is_eve:
+                        new_trans_vert = ssg.add_extra_vert(False)
+                        additional_ssg_transitions[new_trans_vert, extra_adam_act] = SsgTransition(new_trans_vert, {(1.0, next(iter(transition.end_vertices))[1])}, extra_adam_act)
+                        additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, {(1.0, new_trans_vert)}, transition.action))
+                    elif not transition.start_vertex.is_eve and not next(iter(transition.end_vertices))[1].is_eve:
+                        new_trans_vert = ssg.add_extra_vert(True)
+                        additional_ssg_transitions[new_trans_vert, extra_eve_act] = SsgTransition(new_trans_vert, {(1.0, next(iter(transition.end_vertices))[1])}, extra_eve_act)
+                        additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, {(1.0, new_trans_vert)}, transition.action))
+                else:
+                    if transition.start_vertex.is_eve:
+                        new_trans_verts: dict[SsgVertex, SsgVertex] = dict()
+                        new_end_verts: set[tuple[float, SsgVertex]] = set()
+                        for prob, vert in transition.end_vertices:
+                            if vert.is_eve:
+                                new_trans_verts[vert] = ssg.add_extra_vert(False)
+                                additional_ssg_transitions[new_trans_verts[vert], extra_adam_act] = (SsgTransition(new_trans_verts[vert], {(1.0, vert)}, extra_adam_act))
+                                new_end_verts.add((prob, new_trans_verts[vert]))
+                            else:
+                                new_end_verts.add((prob, vert))
+                        additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, new_end_verts, transition.action))
+                    else:
+                        new_trans_verts: dict[SsgVertex, SsgVertex] = dict()
+                        new_end_verts: set[tuple[float, SsgVertex]] = set()
+                        for prob, vert in transition.end_vertices:
+                            if not vert.is_eve:
+                                new_trans_verts[vert] = ssg.add_extra_vert(True)
+                                additional_ssg_transitions[new_trans_verts[vert], extra_eve_act] = (SsgTransition(new_trans_verts[vert], {(1.0, vert)}, extra_eve_act))
+                                new_end_verts.add((prob, new_trans_verts[vert]))
+                            else:
+                                new_end_verts.add((prob, vert))
+                        additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, new_end_verts, transition.action))
+
         ssg.transitions |= additional_ssg_transitions
         if not sanity_check_alternating_vertices(ssg):
             print_warning("The SSG is not alternating. The generated SMG may not be correct.")
@@ -392,7 +448,7 @@ def check_target_reachability(smg_file: str, print_probabilities: bool = False, 
         strategie_filename = "strat2.txt"
         if use_global_path:
             strategie_filename = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, strategie_filename)
-    result2 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmax=? [F \"target\"]", debug=debug)
+    result2 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmax=? [F \"target\"]", strategy_filename=strategie_filename, debug=debug)
     if debug:
         print_debug(f"Second prob checking time: {(time.perf_counter() - pre_prob2_time):.6f}")
     if result2 == -1.0:

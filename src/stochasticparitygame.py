@@ -32,9 +32,9 @@ class SpgVertex:
         :rtype: str
         """
         if self.is_eve:
-            return f"Eve Vertex {self.name}, Priority: {self.priority}"
+            return f"( {self.name} | E | {self.priority} )"
         else:
-            return f"Adam Vertex {self.name}, Priority: {self.priority}"
+            return f"( {self.name} | A | {self.priority} )"
 
 
 class SpgTransition:
@@ -73,11 +73,11 @@ class SpgTransition:
         :return: String representation of the transition
         :rtype: str
         """
-        output = f"Starting Vertex: {self.start_vertex}, Action: {self.action}, "
+        output = f"{self.start_vertex.name} | {self.action} | ( "
 
         for prob, vert in self.end_vertices:
-            output += f"{prob}: to {vert.name} , "
-        output = output[:-3]
+            output += f"{prob} : {vert.name} + "
+        output = output[:-2] + ")"
         return output
 
 

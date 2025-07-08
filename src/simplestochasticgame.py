@@ -31,14 +31,14 @@ class SsgVertex:
         """
         if self.is_eve:
             if self.is_target:
-                return f"Eve Target-Node {self.name}"
+                return f"( {self.name} | E | T )"
             else:
-                return f"Eve Non-Target-Node {self.name}"
+                return f"( {self.name} | E | N )"
         else:
             if self.is_target:
-                return f"Adam Target-Node {self.name}"
+                return f"( {self.name} | A | T )"
             else:
-                return f"Adam Non-Target-Node {self.name}"
+                return f"( {self.name} | A | N )"
 
 
 class SsgTransition:
@@ -77,11 +77,11 @@ class SsgTransition:
         :return: String representation of the transition
         :rtype: str
         """
-        output = f"Starting Vertex: {self.start_vertex}, Action: {self.action}, "
+        output = f"{self.start_vertex.name} | {self.action} | ( "
 
         for prob, vert in self.end_vertices:
-            output += f"{prob}: to {vert.name} , "
-        output = output[:-3]
+            output += f"{prob} : {vert.name} + "
+        output = output[:-2] + ")"
         return output
 
 
@@ -207,6 +207,41 @@ def is_deadlock_vertex(vertex: SsgVertex, transitions: dict[tuple[SsgVertex, str
         if transition.start_vertex == vertex:
             return False
     return True
+
+
+def create_extra_vert(vertices: set[SsgVertex], is_eve: bool, is_target: bool = False) -> SsgVertex:
+    """
+    Creates an extra vertex for an SSG set without adding it.
+    :param vertices: Set of vertices that the new vertex should not conflict with
+    :type vertices: set[SsgVertex]
+    :param is_eve: True if the new vertex is controlled by Eve, False if it is controlled by Adam
+    :type is_eve: bool
+    :param is_target: True if the new vertex is a target vertex, False otherwise
+    :type is_target: bool
+    :return: Newly created vertex
+    :rtype: SsgVertex
+    """
+    i = 1
+    while True:
+        new_name = f"extra{i}"
+        name_available = True
+        for vertex in vertices:
+            if vertex.name == new_name:
+                i += 1
+                name_available = False
+                break
+        if name_available:
+            break
+
+    new_vertex = SsgVertex(f"extra{i}", is_eve, is_target)
+    return new_vertex
+
+
+def has_transition_end_vertex(transition: SsgTransition, end_vertex: SsgVertex) -> bool:
+    for prob, vertex in transition.end_vertices:
+        if vertex == end_vertex:
+            return True
+    return False
 
 
 def read_ssg_from_file(file_name, use_global_path: bool = False, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
