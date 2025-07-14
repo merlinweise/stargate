@@ -7,6 +7,7 @@ import re
 import contextlib
 import io
 import queue as pyqueue
+import math
 from multiprocessing import Process, Queue
 
 from settings import IS_OS_LINUX
@@ -23,6 +24,7 @@ def make_float_list_from_string(s: str) -> list[float]:
     :param s: String representation of a list of integers
     :type s: str
     :return: List of integers
+    :rtype: list[float]
     """
     try:
         new_list = []
@@ -35,6 +37,13 @@ def make_float_list_from_string(s: str) -> list[float]:
 
 
 def make_int_list_from_string(s: str) -> list[int]:
+    """
+    Converts a string representation of a list of integers into an actual list of integers.
+    :param s: A string representation of a list of integers
+    :type s: str
+    :return: List of integers
+    :rtype: list[int]
+    """
     try:
         new_list = []
         for x in s.strip("[]").split(","):
@@ -46,6 +55,13 @@ def make_int_list_from_string(s: str) -> list[int]:
 
 
 def make_str_int_tuple_from_string(s: str) -> tuple[str, str, int, int]:
+    """
+    Converts a string representation of a tuple into an actual tuple.
+    :param s: String representation of a tuple in the format "[str, str, int, int]"
+    :type s: str
+    :return: Tuple containing two strings and two integers
+    :rtype: tuple[str, str, int, int]
+    """
     try:
         parts = s.strip("[]").split(",")
         if len(parts) != 4:
@@ -59,11 +75,11 @@ def make_str_int_tuple_from_string(s: str) -> tuple[str, str, int, int]:
 def create_random_ssg(number_of_vertices: int, number_of_transitions: int, number_of_target_vertices: int, no_additional_selfloops: bool = False, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
     """
     Create a new SSG with random parameters.
-    :param number_of_vertices: Maximum number of vertices in the SSG
+    :param number_of_vertices: Number of vertices in the SSG
     :type number_of_vertices: int
-    :param number_of_transitions: Maximum number of transitions in the SSG
+    :param number_of_transitions: Number of outgoing transitions for each vertex
     :type number_of_transitions: int
-    :param number_of_target_vertices: Maximum number of target vertices in the SSG
+    :param number_of_target_vertices: Number of target vertices in the SSG
     :type number_of_target_vertices: int
     :param no_additional_selfloops: Whether to add additional self-loops
     :type no_additional_selfloops: bool
@@ -84,25 +100,23 @@ def create_random_ssg(number_of_vertices: int, number_of_transitions: int, numbe
     init_vertex = random.choice(list(vertices.values()))
     transitions: dict[tuple[SsgVertex, str], SsgTransition] = dict()
     action = 0
-    for start_vertex in vertices.values():
-        type_of_transition = random.choice([0, 1])
-        if type_of_transition == 0:
-            end_vertex = random.choice(list(vertices.values()))
-            transitions[(start_vertex, str(action))] = SsgTransition(start_vertex, {(1.0, end_vertex)}, str(action))
-        else:
-            end_vertices = random.sample(list(vertices.values()), 2)
-            transitions[(start_vertex, str(action))] = SsgTransition(start_vertex, {(0.5, end_vertices[0]), (0.5, end_vertices[1])}, str(action))
-        action += 1
-    for i in range(number_of_transitions-number_of_vertices):
-        start_vertex = random.choice(list(vertices.values()))
-        type_of_transition = random.choice([0, 1])
-        if type_of_transition == 0:
-            end_vertex = random.choice(list(vertices.values()))
-            transitions[(start_vertex, str(action))] = SsgTransition(start_vertex, {(1.0, end_vertex)}, str(action))
-        else:
-            end_vertices = random.sample(list(vertices.values()), 2)
-            transitions[(start_vertex, str(action))] = SsgTransition(start_vertex, {(0.5, end_vertices[0]), (0.5, end_vertices[1])}, str(action))
-        action += 1
+    for vertex in vertices.values():
+        for i in range(number_of_transitions):
+            if i == 0:
+                random_vertex1 = random.choice(list(vertices.values()))
+                random_vertex2 = random.choice(list(vertices.values()))
+                while random_vertex2 == random_vertex1:
+                    random_vertex2 = random.choice(list(vertices.values()))
+                transitions[(vertex, f"action_{i}")] = SsgTransition(start_vertex=vertex, end_vertices={(0.5, random_vertex1), (0.5, random_vertex2)}, action=f"action_{i}")
+            else:
+                if random.randint(0, 1) == 1:
+                    transitions[(vertex, f"action_{i}")] = SsgTransition(start_vertex=vertex, end_vertices={(1.0, random.choice(list(vertices.values())))}, action=f"action_{i}")
+                else:
+                    random_vertex1 = random.choice(list(vertices.values()))
+                    random_vertex2 = random.choice(list(vertices.values()))
+                    while random_vertex2 == random_vertex1:
+                        random_vertex2 = random.choice(list(vertices.values()))
+                    transitions[(vertex, f"action_{i}")] = SsgTransition(start_vertex=vertex, end_vertices={(0.5, random_vertex1), (0.5, random_vertex2)}, action=f"action_{i}")
     if no_additional_selfloops:
         vertices["eve_sink"] = SsgVertex("eve_sink", True, False)
         vertices["adam_sink"] = SsgVertex("adam_sink", False, False)
@@ -463,13 +477,23 @@ def _iteration_worker(q, ssg_type, i, use_global_path):
 
 
 def single_iteration_for_exponential_benchmark(ssg_type: str, i: int, use_global_path: bool = True) -> tuple[float, float, float, float, int, int, int, int, str, str, int]:
-
+    """
+    Run a single iteration of the benchmark for a specific SSG type and index.
+    :param ssg_type: Type of SSG to create
+    :type ssg_type: str
+    :param i: Iterator for the size of the SSG
+    :type i: int
+    :param use_global_path: Whether to use the global path for the SMG file
+    :type use_global_path: bool
+    :return: Tuple containing the transformation and property checking times for both versions, number of vertices and transitions, and paths to the SMG files
+    :rtype: tuple[float, float, float, float, int, int, int, int, str, str, int]
+    """
     if ssg_type == "binary":
         size_param = i + 2
     else:
         size_param = (2 ** (i + 1))
     if ssg_type == "random":
-        ssg_i = create_random_ssg(size_param, 5 * size_param, max(1, size_param // 10),
+        ssg_i = create_random_ssg(size_param, math.ceil(0.1 * size_param), max(1, size_param // 10),
                                   no_additional_selfloops=False)
     elif ssg_type == "random_no_additional_selfloops":
         ssg_i = create_random_ssg(size_param, 5 * size_param, max(1, size_param // 10),
@@ -515,24 +539,24 @@ def single_iteration_for_exponential_benchmark(ssg_type: str, i: int, use_global
 
 def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 120, save_results: bool = None, result_path: str = None, use_global_path: bool = True, force: bool = True, debug: bool = GLOBAL_DEBUG) -> tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]:
     """
-        Benchmark the creation and property checking of multiple SSGs.
-        :param ssg_type: Type of SSG to create (random, binary, empty)
-        :type ssg_type: str
-        :param time_per_iteration: Time in seconds for each iteration
-        :type time_per_iteration: int
-        :param save_results: Whether to write the benchmark results to a file
-        :type save_results: bool
-        :param result_path: Path to save the benchmark results
-        :type result_path: str
-        :param use_global_path: Whether to use the global path for the SMG file
-        :type use_global_path: bool
-        :param force: Whether to force the creation of the SSG
-        :type force: bool
-        :param debug: Whether to print debug information
-        :type debug: bool
-        :return: Tuple containing the average transformation and property checking times for both versions
-        :rtype: tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]
-        """
+    Benchmark the creation and property checking of multiple SSGs.
+    :param ssg_type: Type of SSG to create (random, binary, empty)
+    :type ssg_type: str
+    :param time_per_iteration: Time in seconds for each iteration
+    :type time_per_iteration: int
+    :param save_results: Whether to write the benchmark results to a file
+    :type save_results: bool
+    :param result_path: Path to save the benchmark results
+    :type result_path: str
+    :param use_global_path: Whether to use the global path for the SMG file
+    :type use_global_path: bool
+    :param force: Whether to force the creation of the SSG
+    :type force: bool
+    :param debug: Whether to print debug information
+    :type debug: bool
+    :return: Tuple containing the average transformation and property checking times for both versions
+    :rtype: tuple[list[float], list[float], list[float], list[float], list[int], list[int], list[int], list[int], tuple[str, str, int, int]]
+    """
 
     all_v1_trans_times = []
     all_v2_trans_times = []
@@ -1089,12 +1113,15 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
 
 
 def main():
-    list_of_benchmark_results = [(benchmark_exponential_ssgs(ssg_type="random", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True))]
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="random_no_additional_selfloops", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="binary", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="complete", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="chain", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="empty", time_per_iteration=120, save_results=True, use_global_path=True, force=True, debug=True)))
+    """
+    Adjustable main function that is executed when the script is run.
+    """
+    list_of_benchmark_results = [(benchmark_exponential_ssgs(ssg_type="random", time_per_iteration=600, save_results=True, use_global_path=True, force=True, debug=True))]
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="random_no_additional_selfloops", time_per_iteration=600, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="binary", time_per_iteration=600, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="complete", time_per_iteration=600, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="chain", time_per_iteration=600, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="empty", time_per_iteration=600, save_results=True, use_global_path=True, force=True, debug=True)))
     plot_combined_benchmark_results(list_of_benchmark_results, show_times=True, show_stats=True, plot_name="test_benchmark_exponential_combined", save_plots=True, use_global_path=True)
 
 

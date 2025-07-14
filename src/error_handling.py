@@ -2,7 +2,7 @@ import sys
 from fractions import Fraction
 
 
-def print_warning(reason: str):
+def print_warning(reason: str) -> None:
     """
     Prints a warning message.
     :param reason: Reason for the warning
@@ -11,7 +11,7 @@ def print_warning(reason: str):
     print(f"WARNING: {reason}")
 
 
-def print_error(reason: str):
+def print_error(reason: str) -> None:
     """
     Prints an error message and exits the program.
     :param reason: Reason for the error
@@ -21,7 +21,7 @@ def print_error(reason: str):
     sys.exit(1)
 
 
-def print_debug(reason: str):
+def print_debug(reason: str) -> None:
     """
     Prints debug information.
     :param reason: Reason for the debug message

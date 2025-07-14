@@ -12,6 +12,19 @@ from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_LINUX, PRISM_PATH, MAX_ITE
 
 
 def ssg_to_smgspec(ssg: SimpleStochasticGame, version: int = SSG_TO_SMG_VERSION, debug: bool = GLOBAL_DEBUG, print_correspondingvertices: bool = False) -> str:
+    """
+    Converts a SimpleStochasticGame to a SMG specification string.
+    :param ssg: SimpleStochasticGame to convert
+    :type ssg: SimpleStochasticGame
+    :param version: Version of the SMG specification to use (1 : new alternating vertices, 2 : old alternating vertices,  3 : synchronizing vertices)
+    :type version: int
+    :param debug: Whether to print debug information, defaults to GLOBAL_DEBUG
+    :type debug: bool
+    :param print_correspondingvertices: Whether to print the corresponding states for each vertex, defaults to False
+    :type print_correspondingvertices: bool
+    :return: SMG specification string
+    :rtype: str
+    """
     if debug:
         start_time = time.perf_counter()
     content = "smg\n\n"
@@ -32,7 +45,6 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version: int = SSG_TO_SMG_VERSION,
                 extra_adam_act = f"extra_adam_action{i}"
                 break
         if version == 1:
-            # new version (1) with new vertex for every vertex
             intermediate_vertices: dict[SsgVertex, SsgVertex] = dict()
             for vertex in ssg.vertices.values():
                 if vertex.is_eve:
@@ -85,7 +97,6 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version: int = SSG_TO_SMG_VERSION,
                         additional_ssg_transitions[transition.start_vertex, transition.action] = (SsgTransition(transition.start_vertex, new_end_verts, transition.action))
 
         else:
-            # older version (2) with new vertex for every transition
             additional_ssg_transitions = dict()
             for transition in ssg.transitions.values():
                 if len(transition.end_vertices) == 1:
@@ -208,7 +219,6 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version: int = SSG_TO_SMG_VERSION,
                 adam_mod += f"\t[{new_adam_actions[transition.action]}] (es={new_transitions[transition][0][0]} & as={new_transitions[transition][0][1]}) \t-> (as'=0) ;\n"
         content += eve_mod + "endmodule\n\n" + adam_mod + "endmodule"
     else:
-        # synchronous version (3)
         new_vertices: dict[SsgVertex, tuple[int, int]] = dict()
         ssg_eve_actions: set[str] = set()
         ssg_adam_actions: set[str] = set()
@@ -402,6 +412,29 @@ def sanity_check_alternating_vertices(ssg: SimpleStochasticGame) -> bool:
 
 
 def check_property(smg_file, property_string, use_global_path: bool = False, strategy_filename: str = None, debug: bool = GLOBAL_DEBUG, prism_path: str = PRISM_PATH, max_iters: int = MAX_ITERS, prism_epsilon: float = PRISM_EPSILON, prism_solving_algorithm: str = PRISM_SOLVING_ALGORITHM) -> float:
+    """
+    Checks a property of the given SMG file using PRISM-games.
+    :param smg_file: SMG file to check
+    :type smg_file: str
+    :param property_string: Property string to check
+    :type property_string: str
+    :param use_global_path: Whether to use the global path for the SMG file and strategy filename, defaults to False
+    :type use_global_path: bool
+    :param strategy_filename: Name of the strategy file to export, if None no strategy will be exported (feature not implemented since PRISM-games extension does not support strategy exportation)
+    :type strategy_filename: str | None
+    :param debug: Whether to print debug information, defaults to False
+    :type debug: bool
+    :param prism_path: Path to the PRISM executable, defaults to PRISM_PATH
+    :type prism_path: str
+    :param max_iters: Maximum number of iterations for the PRISM solver, defaults to MAX_ITERS
+    :type max_iters: int
+    :param prism_epsilon: Precision for the PRISM solver, defaults to PRISM_EPSILON
+    :type prism_epsilon: float
+    :param prism_solving_algorithm: Algorithm to use for solving the PRISM model, defaults to PRISM_SOLVING_ALGORITHM
+    :type prism_solving_algorithm: str
+    :return: Resulting probability of the property, or -1.0 if the check failed
+    :rtype: float
+    """
     if debug:
         start_time = time.perf_counter()
     if use_global_path:
@@ -424,6 +457,29 @@ def check_property(smg_file, property_string, use_global_path: bool = False, str
 
 
 def check_target_reachability(smg_file: str, print_probabilities: bool = False, export_strategies: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False, prism_path: str = PRISM_PATH, max_iters: int = MAX_ITERS, prism_epsilon: float = PRISM_EPSILON, prism_solving_algorithm: str = PRISM_SOLVING_ALGORITHM) -> tuple[float, float]:
+    """
+    Checks the minimum and maximum probabilities of reaching a target state for Eve in the given SMG file.
+    :param smg_file: SMG file to check
+    :type smg_file: str
+    :param print_probabilities: Whether to print the probabilities, defaults to False
+    :type print_probabilities: bool
+    :param export_strategies: Whether to export strategies, defaults to False
+    :type export_strategies: bool
+    :param debug: Whether to print debug information, defaults to GLOBAL_DEBUG
+    :type debug: bool
+    :param use_global_path: Whether to use the global path for the SMG file, defaults to False
+    :type use_global_path: bool
+    :param prism_path: Path to the PRISM executable, defaults to PRISM_PATH
+    :type prism_path: str
+    :param max_iters: Maximum number of iterations for the PRISM solver, defaults to MAX_ITERS
+    :type max_iters: int
+    :param prism_epsilon: Precision for the PRISM solver, defaults to PRISM_EPSILON
+    :type prism_epsilon: float
+    :param prism_solving_algorithm: Algorithm to use for solving the PRISM model, defaults to PRISM_SOLVING_ALGORITHM
+    :type prism_solving_algorithm: str
+    :return: Result of both checks
+    :rtype: tuple[float, float]
+    """
     if debug:
         start_time = time.perf_counter()
     if use_global_path:
@@ -463,7 +519,20 @@ def check_target_reachability(smg_file: str, print_probabilities: bool = False, 
     return result1, result2
 
 
-def save_smg_file(content: str, file_name: str = "", force: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False):
+def save_smg_file(smg_spec: str, file_name: str = "", force: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False):
+    """
+    Saves the given SMG specification to an SMG file.
+    :param smg_spec: SMG specification content to save
+    :type smg_spec: str
+    :param file_name: Name of the file to save the SMG specification to, defaults to "out.smg"
+    :type file_name: str
+    :param force: Whether to overwrite the file if it already exists, defaults to False
+    :type force: bool
+    :param debug: Whether to print debug information, defaults to GLOBAL_DEBUG
+    :type debug: bool
+    :param use_global_path: Whether to use the global path for the file, defaults to False
+    :type use_global_path: bool
+    """
     if debug:
         start_time = time.perf_counter()
     if not file_name:
@@ -477,7 +546,7 @@ def save_smg_file(content: str, file_name: str = "", force: bool = False, debug:
     else:
         try:
             with open(file_name, "w") as file:
-                file.write(content)
+                file.write(smg_spec)
         except Exception as e:
             print_warning(f"Could not save SMG file {file_name}. Error: {str(e)}")
             return
@@ -486,6 +555,19 @@ def save_smg_file(content: str, file_name: str = "", force: bool = False, debug:
 
 
 def create_dot_file(smg_file: str, dot_file: str = "", force: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False):
+    """
+    Creates a DOT file from the given SMG file using PRISM.
+    :param smg_file: Name of the SMG file to convert to DOT
+    :type smg_file: str
+    :param dot_file: Name of the DOT file to create, defaults to the same name as the SMG file with .dot extension
+    :type dot_file: str
+    :param force: Whether to overwrite the DOT file if it already exists, defaults to False
+    :type force: bool
+    :param debug: Whether to print debug information, defaults to GLOBAL_DEBUG
+    :type debug: bool
+    :param use_global_path: Whether to use the global path for the SMG and DOT files, defaults to False
+    :type use_global_path: bool
+    """
     if debug:
         start_time = time.perf_counter()
     if use_global_path and (not dot_file or dot_file.endswith(".dot")):
@@ -526,6 +608,21 @@ def create_dot_file(smg_file: str, dot_file: str = "", force: bool = False, debu
 
 
 def create_png_file(dot_file: str, png_file: str = "", open_png: bool = False, force: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False):
+    """
+    Creates a PNG file from the given DOT file using Graphviz's dot command. (Recommend using SVG instead of PNG for better quality)
+    :param dot_file: Name of the DOT file to convert to PNG
+    :type dot_file: str
+    :param png_file: Name of the PNG file to create, defaults to the same name as the DOT file with .png extension
+    :type png_file: str
+    :param open_png: Whether to open the PNG file after creation, defaults to False
+    :type open_png: bool
+    :param force: Whether to overwrite the PNG file if it already exists, defaults to False
+    :type force: bool
+    :param debug: Whether to print debug information, defaults to GLOBAL_DEBUG
+    :type debug: bool
+    :param use_global_path: Whether to use the global path for the DOT and PNG files, defaults to False
+    :type use_global_path: bool
+    """
     if debug:
         start_time = time.perf_counter()
     if use_global_path and (not png_file or png_file.endswith(".png")):
@@ -573,6 +670,21 @@ def create_png_file(dot_file: str, png_file: str = "", open_png: bool = False, f
 
 
 def create_svg_file(dot_file: str, svg_file: str = "", open_svg: bool = False, force: bool = False, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False):
+    """
+    Creates an SVG file from the given DOT file using Graphviz's dot command.
+    :param dot_file: Name of the DOT file to convert to SVG
+    :type dot_file: str
+    :param svg_file: Name of the SVG file to create, defaults to the same name as the DOT file with .svg extension
+    :type svg_file: str
+    :param open_svg: Whether to open the SVG file after creation, defaults to False
+    :type open_svg: bool
+    :param force: Whether to overwrite the SVG file if it already exists, defaults to False
+    :type force: bool
+    :param debug: Whether to print debug information, defaults to GLOBAL_DEBUG
+    :type debug: bool
+    :param use_global_path: Whether to use the global path for the DOT and SVG files, defaults to False
+    :type use_global_path: bool
+    """
     if debug:
         start_time = time.perf_counter()
     if use_global_path and (not svg_file or svg_file.endswith(".svg")):

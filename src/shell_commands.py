@@ -5,10 +5,28 @@ from settings import GLOBAL_DEBUG, IS_OS_LINUX, IS_WSL_INSTALLED
 
 
 def sh_escape(s: str) -> str:
+    """
+    Escapes a string for use in a shell command by wrapping it in single quotes and escaping any single quotes within the string.
+    :param s: String to escape
+    :type s: str
+    :return: Escaped string suitable for shell commands
+    :rtype: str
+    """
     return "'" + s.replace("'", "'\\''") + "'"
 
 
-def run_command(command: str | list[str], use_shell: bool = True, debug: bool = GLOBAL_DEBUG):
+def run_command(command: str | list[str], use_shell: bool = True, debug: bool = GLOBAL_DEBUG) -> subprocess.CompletedProcess | None:
+    """
+    Runs a shell command and returns the result.
+    :param command: Command to run, can be a string or a list of strings
+    :type command: str | list[str]
+    :param use_shell: Whether to use the shell to execute the command, default is True
+    :type use_shell: bool
+    :param debug: Whether to print debug information, default is GLOBAL_DEBUG
+    :type debug: bool
+    :return: Result of the command execution, or None if the command failed
+    :rtype: subprocess.CompletedProcess | None
+    """
     if isinstance(command, str) and not use_shell:
         command = command.split(' ')
         if debug:
@@ -28,7 +46,18 @@ def run_command(command: str | list[str], use_shell: bool = True, debug: bool = 
         return None
 
 
-def run_command_linux(command: str | list[str], use_shell: bool = True, debug: bool = GLOBAL_DEBUG):
+def run_command_linux(command: str | list[str], use_shell: bool = True, debug: bool = GLOBAL_DEBUG) -> subprocess.CompletedProcess | None:
+    """
+    Runs a shell command on a Linux system or WSL and returns the result.
+    :param command: Command to run, can be a string or a list of strings
+    :type command: str | list[str]
+    :param use_shell: Whether to use the shell to execute the command, default is True
+    :type use_shell: bool
+    :param debug: Whether to print debug information, default is GLOBAL_DEBUG
+    :type debug: bool
+    :return: Result of the command execution, or None if the command failed
+    :rtype: subprocess.CompletedProcess | None
+    """
     try:
         if use_shell:
             if IS_OS_LINUX:

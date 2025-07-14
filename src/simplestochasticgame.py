@@ -238,6 +238,15 @@ def create_extra_vert(vertices: set[SsgVertex], is_eve: bool, is_target: bool = 
 
 
 def has_transition_end_vertex(transition: SsgTransition, end_vertex: SsgVertex) -> bool:
+    """
+    Checks if the given transition has an end vertex that matches the given end vertex.
+    :param transition: Transition to check
+    :type transition: SsgTransition
+    :param end_vertex: Vertex to check for in the transition's end vertices
+    :type end_vertex: SsgVertex
+    :return: Whether the transition has the end vertex
+    :rtype: bool
+    """
     for prob, vertex in transition.end_vertices:
         if vertex == end_vertex:
             return True

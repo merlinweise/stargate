@@ -5,7 +5,7 @@ from path_conversion import windows_to_linux_path
 from error_handling import print_error
 
 USE_EXACT_ARITHMETIC = False  # If True, replaces floats with exact arithmetic (fractions), default is True
-MAX_DENOMINATOR = 2147483647  # 2,147,483,647 is the optimal value for PRISM-games
+MAX_DENOMINATOR = 2_147_483_647  # 2,147,483,647 is the optimal value for PRISM-games
 SSG_TO_SMG_VERSION = 1  # 1: Performant alternating version, 2: Older alternating version, 3: Synchronous version, default is 1
 
 GLOBAL_IN_OUT_PATH_LINUX = ""  # only assign if the OS is Linux, otherwise it will be set to GLOBAL_IN_OUT_PATH_WINDOWS
@@ -16,7 +16,7 @@ PRINT_VERTEX_CREATION_WARNINGS = False  # If True, prints warnings about deadloc
 
 ENSURE_EVE_AND_ADAM_VERTICES = False  # If True, ensures that every SPG and SSG has at least one Eve and one Adam vertex, if False, the algorithm will not ensure this, default is True
 PRISM_EPSILON = 1e-6  # Epsilon for PRISM, used for numerical stability in value iteration algorithms, default is 1e-6
-MAX_ITERS = 1000000000  # Maximum number of iterations for PRISM algorithms, default is 10000
+MAX_ITERS = 1_000_000_000  # Maximum number of iterations for PRISM algorithms, default is 10000
 PRISM_PATH = "/mnt/c/Uni_Zeug/6.Semester/Bachelorarbeit/prism_extension/Algorithms-For-Stochastic-Games/prism-games-3.0.beta-src/prism/bin/prism"  # Path to the PRISM executable, needs to be in Linux format
 PRISM_SOLVING_ALGORITHM = "POLICY_ITERATION"  # "VALUE_ITERATION" or "GAUSS_SEIDEL_VALUE_ITERATION" or "POLICY_ITERATION" or "MODIFIED_POLICY_ITERATION" or "INTERVAL_ITERATION" or "SOUND_VALUE_ITERATION" or "TOPOLOGICAL VALUE_ITERATION" or "SOUND_TOPOLOGICAL_VALUE_ITERATION" or "SOUND_POLICY_ITERATION" or "SOUND_MODIFIED_POLICY_ITERATION"
 

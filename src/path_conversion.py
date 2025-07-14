@@ -4,6 +4,13 @@ from pathlib import PureWindowsPath
 
 
 def linux_to_windows_path(path: str) -> str:
+    """
+    Converts a Linux or SMB path to a Windows path.
+    :param path: Path in Linux or SMB format
+    :type path: str
+    :return: Path in Windows format
+    :rtype: str
+    """
     path = path.strip()
 
     if path.startswith('smb://'):
@@ -28,6 +35,13 @@ def linux_to_windows_path(path: str) -> str:
 
 
 def windows_to_linux_path(path: str) -> str:
+    """
+    Converts a Windows or SMB path to a Linux path.
+    :param path: Path in Windows or SMB format
+    :type path: str
+    :return: Path in Linux format
+    :rtype: str
+    """
     path = path.strip()
 
     if path.startswith('\\\\'):
@@ -54,6 +68,13 @@ def windows_to_linux_path(path: str) -> str:
 
 
 def is_linux_path(path: str) -> bool:
+    """
+    Checks if the given path is a Linux path.
+    :param path: Path to check
+    :type path: str
+    :return: Whether the path is a Linux path
+    :rtype: bool
+    """
     if path.startswith("/"):
         return True
     if path.startswith("smb://"):

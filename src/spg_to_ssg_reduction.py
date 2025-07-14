@@ -25,8 +25,19 @@ def max_denom_and_min_prob(spg: StochasticParityGame, max_d: int=10_000) -> (flo
     fractions = [Fraction(f).limit_denominator(max_d) for f in floats]
     return (min(floats), max(fr.denominator for fr in fractions))
 
-def compute_alphas_for_spg(spg: StochasticParityGame, epsilon: float = None, max_d: int = 10_000):
 
+def compute_alphas_for_spg(spg: StochasticParityGame, epsilon: float = None, max_d: int = 10_000) -> dict[int, Fraction | float]:
+    """
+    Computes the alphas for a StochasticParityGame to convert it to a SimpleStochasticGame.
+    :param spg: StochasticParityGame to compute alphas for
+    :type spg: StochasticParityGame
+    :param epsilon: Precision parameter for the conversion, if None, alphas are computed such that the strategy is optimal for the game.
+    :type epsilon: float
+    :param max_d: Maximum denominator for the fractions, defaults to 10_000
+    :type max_d: int
+    :return: Dictionary mapping priorities to alphas where the alphas are either Fractions or floats depending on the USE_EXACT_ARITHMETIC setting.
+    :rtype: dict[int, Fraction | float]
+    """
     delta_min_float, max_denominator_M = max_denom_and_min_prob(spg, max_d)
     if delta_min_float == 1.0:
         print_error("The StochasticParity is not stochastic, therefore the reduction cannot be performed.")
