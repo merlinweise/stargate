@@ -8,8 +8,10 @@ import contextlib
 import io
 import queue as pyqueue
 import math
+
 from multiprocessing import Process, Queue
 
+from benchmarking_global import kill_process_and_children
 from settings import IS_OS_LINUX
 from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability
 from simplestochasticgame import SsgVertex, SsgTransition, SimpleStochasticGame, is_deadlock_vertex
@@ -602,7 +604,7 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 120, sav
         if p.is_alive():
             if debug:
                 print_debug(f"Timeout of {time_per_iteration} seconds reached for SSG {i + 1}.")
-            p.terminate()
+            kill_process_and_children(p.pid)
             p.join()
             try:
                 if use_global_path:
