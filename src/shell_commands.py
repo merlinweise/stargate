@@ -1,6 +1,6 @@
 import subprocess
 
-from error_handling import print_error, print_debug
+from error_handling import print_error, print_debug, print_warning
 from settings import GLOBAL_DEBUG, IS_OS_LINUX, IS_WSL_INSTALLED
 
 
@@ -77,7 +77,7 @@ def run_command_linux(command: str | list[str], use_shell: bool = True, debug: b
 
     except subprocess.CalledProcessError as e:
         if len(e.stderr) > 0:
-            print_error(f"Command {command} failed with error: {e.stderr}")
+            print_warning(f"Command {command} failed with error: {e.stderr}")
         else:
-            print_error(f"Command {command} failed with error: {e.stdout}")
+            print_warning(f"Command {command} failed with error: {e.stdout}")
         return None

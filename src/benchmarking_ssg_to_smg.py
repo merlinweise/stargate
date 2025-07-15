@@ -15,7 +15,7 @@ from benchmarking_global import kill_process_and_children
 from settings import IS_OS_LINUX
 from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability
 from simplestochasticgame import SsgVertex, SsgTransition, SimpleStochasticGame, is_deadlock_vertex
-from error_handling import print_error, print_debug
+from error_handling import print_error, print_debug, print_warning
 from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_LINUX, GLOBAL_IN_OUT_PATH_WINDOWS, GLOBAL_IN_OUT_PATH, PRISM_PATH
 from shell_commands import run_command_linux, sh_escape
 
@@ -621,7 +621,7 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 120, sav
         try:
             result = q.get_nowait()
         except pyqueue.Empty:
-            print_error(f"Error: No result received from subprocess for SSG {i + 1}.")
+            print_warning(f"No result received from subprocess for SSG {i + 1}.")
             break
 
         if isinstance(result, Exception):
@@ -633,7 +633,7 @@ def benchmark_exponential_ssgs(ssg_type: str, time_per_iteration: int = 120, sav
          smg_v1_path, smg_v2_path, size_param) = result
 
         if vert_v1 < 0 or vert_v2 < 0 or trans_v1 < 0 or trans_v2 < 0:
-            print_error(f"Error: Negative values for vertices or transitions in SSG {i + 1}.")
+            print_warning(f"Negative values for vertices or transitions in SSG {i + 1}.")
             break
 
         if debug:
@@ -1105,7 +1105,7 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
                 filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i}")
             else:
                 filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename)
-        fig.savefig(filename + ".png")
+        fig_stat.savefig(filename + ".png")
 
     if not show_stats:
         plt.close(fig_stat)
