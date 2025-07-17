@@ -59,7 +59,7 @@ def compute_alphas_for_spg(spg: StochasticParityGame, epsilon: float = None, max
             alphas[next_k] = alphas[prev_k] * (ratio_bound ** gap)
     else:
         numerator = Fraction(4) * Fraction(epsilon) * delta_min ** n_states
-        denominator = (Fraction(4) - Fraction(epsilon)) * delta_min
+        denominator = (Fraction(4) - Fraction(epsilon)) * Fraction(8)
         alpha0 = numerator / denominator
 
         ratio_bound = (one_minus * (delta_min ** n_states)) / (((8 * (4 - Fraction(epsilon))) / (4 * Fraction(epsilon))) + 1)
