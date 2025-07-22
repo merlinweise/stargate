@@ -221,20 +221,15 @@ def create_extra_vert(vertices: set[SsgVertex], is_eve: bool, is_target: bool = 
     :return: Newly created vertex
     :rtype: SsgVertex
     """
+    used_names = {v.name for v in vertices}
     i = 1
     while True:
         new_name = f"extra{i}"
-        name_available = True
-        for vertex in vertices:
-            if vertex.name == new_name:
-                i += 1
-                name_available = False
-                break
-        if name_available:
+        if new_name not in used_names:
             break
+        i += 1
 
-    new_vertex = SsgVertex(f"extra{i}", is_eve, is_target)
-    return new_vertex
+    return SsgVertex(new_name, is_eve, is_target)
 
 
 def has_transition_end_vertex(transition: SsgTransition, end_vertex: SsgVertex) -> bool:

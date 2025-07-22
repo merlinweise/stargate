@@ -3,6 +3,7 @@ import os.path
 import time
 import re
 import posixpath
+import itertools
 
 from path_conversion import windows_to_linux_path, linux_to_windows_path, is_linux_path
 from simplestochasticgame import SimpleStochasticGame, SsgTransition, SsgVertex, has_transition_end_vertex, create_extra_vert
@@ -45,18 +46,23 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version: int = SSG_TO_SMG_VERSION,
                 extra_adam_act = f"extra_adam_action{i}"
                 break
         if version == 1:
-            intermediate_vertices: dict[SsgVertex, SsgVertex] = dict()
-            for vertex in ssg.vertices.values():
-                if vertex.is_eve:
-                    for transition in ssg.transitions.values():
-                        if transition.start_vertex.is_eve and has_transition_end_vertex(transition, vertex) and vertex not in intermediate_vertices and not (transition.start_vertex == vertex and len(transition.end_vertices) == 1):
-                            new_vert = create_extra_vert(set(ssg.vertices.values()) | set(intermediate_vertices.values()), False)
-                            intermediate_vertices[vertex] = new_vert
-                else:
-                    for transition in ssg.transitions.values():
-                        if not transition.start_vertex.is_eve and has_transition_end_vertex(transition, vertex) and vertex not in intermediate_vertices and not (transition.start_vertex == vertex and len(transition.end_vertices) == 1):
-                            new_vert = create_extra_vert(set(ssg.vertices.values()) | set(intermediate_vertices.values()), True)
-                            intermediate_vertices[vertex] = new_vert
+            intermediate_vertices: dict[tuple[SsgVertex], SsgVertex] = {}
+            all_vertices: set[str] = {v.name for v in ssg.vertices.values()}
+            already_noticed: set[SsgVertex] = set()
+            counter = itertools.count(1)
+            for transition in ssg.transitions.values():
+                for _, end_vertex in transition.end_vertices:
+                    if end_vertex in already_noticed:
+                        continue
+                    if transition.start_vertex == end_vertex and len(transition.end_vertices) == 1:
+                        continue
+                    if transition.start_vertex.is_eve == end_vertex.is_eve:
+                        already_noticed.add(end_vertex)
+                        new_name = f"extra{next(counter)}"
+                        while new_name in all_vertices:
+                            new_name = f"extra{next(counter)}"
+                        new_vert = SsgVertex(name=new_name, is_eve=not end_vertex.is_eve, is_target=False)
+                        intermediate_vertices[end_vertex] = new_vert
             for vertex in intermediate_vertices.values():
                 ssg.vertices[vertex.name] = vertex
             additional_ssg_transitions = dict()
@@ -186,8 +192,8 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version: int = SSG_TO_SMG_VERSION,
         for act in new_adam_actions.values():
             content += f", [{act}]"
         content += "\nendplayer\n\n"
-        eve_mod = f"module evemod\n\tes : [0..{eve_vert_count-1}] init {new_init_vertex[0]} ;\n"
-        adam_mod = f"module adammod\n\tas : [0..{adam_vert_count-1}] init {new_init_vertex[1]} ;\n"
+        eve_mod = f"module evemod\n\tes : [0..{max(1, eve_vert_count-1)}] init {new_init_vertex[0]} ;\n"
+        adam_mod = f"module adammod\n\tas : [0..{max(1, adam_vert_count-1)}] init {new_init_vertex[1]} ;\n"
         for transition in new_transitions:
             if transition.start_vertex.is_eve:
                 if len(transition.end_vertices) == 1:
@@ -271,10 +277,10 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version: int = SSG_TO_SMG_VERSION,
         if has_adam_probabilistic_actions(ssg):
             content += ", [ap]"
         content += "\nendplayer\n\n"
-        eve_mod = f"module evemod\n\te1 : [0..{eve_vert_count-1}] init {new_init_vertex[0]} ;\n\te2 : [0..{adam_vert_count-1}] init {new_init_vertex[1]} ;\n"
+        eve_mod = f"module evemod\n\te1 : [0..{max(1, eve_vert_count-1)}] init {new_init_vertex[0]} ;\n\te2 : [0..{max(1, adam_vert_count-1)}] init {new_init_vertex[1]} ;\n"
         if has_eve_probabilistic_actions(ssg):
             eve_mod += f"\tre : [0..1] init 0 ;\n"
-        adam_mod = f"module adammod\n\ta1 : [0..{eve_vert_count-1}] init {new_init_vertex[0]} ;\n\ta2 : [0..{adam_vert_count-1}] init {new_init_vertex[1]} ;\n"
+        adam_mod = f"module adammod\n\ta1 : [0..{max(1, eve_vert_count-1)}] init {new_init_vertex[0]} ;\n\ta2 : [0..{max(1, adam_vert_count-1)}] init {new_init_vertex[1]} ;\n"
         if has_adam_probabilistic_actions(ssg):
             adam_mod += f"\tra : [0..1] init 0 ;\n"
         rande_extra = ""
@@ -315,16 +321,16 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version: int = SSG_TO_SMG_VERSION,
                         adam_mod = adam_mod[:-3] + " ;\n"
                         eve_mod += f"\t[{new_adam_actions[transition.action]}] (e1={new_transitions[transition][0][0]} & e2={new_transitions[transition][0][1]} & ra=0) \t-> true ;\n"
         if has_eve_probabilistic_actions(ssg):
-            eve_mod += f"\t[ep] (re=1) \t\t\t\t-> (re' = 0) ;\n"
-            adam_mod += f"\t[ep] (re=1) \t\t\t\t-> (a1'= e1) & (a2' = e2) ;\n"
+            eve_mod += f"\t[ep] (re=1) \t\t\t-> (re' = 0) ;\n"
+            adam_mod += f"\t[ep] (re=1) \t\t\t-> (a1'= e1) & (a2' = e2) ;\n"
         if has_adam_probabilistic_actions(ssg):
-            adam_mod += f"\t[ap] (ra=1) \t\t\t\t-> (ra' = 0) ;\n"
-            eve_mod += f"\t[ap] (ra=1) \t\t\t\t-> (e1' = a1) & (e2' = a2) ;\n"
+            adam_mod += f"\t[ap] (ra=1) \t\t\t-> (ra' = 0) ;\n"
+            eve_mod += f"\t[ap] (ra=1) \t\t\t-> (e1' = a1) & (e2' = a2) ;\n"
         content += eve_mod + "endmodule\n\n" + adam_mod + "endmodule"
     content += "\n\nlabel \"target\" = ("
     for vertex in ssg.vertices.values():
         if vertex.is_target:
-            if version:
+            if version == 1 or version == 2:
                 content += f"(es={new_vertices[vertex][0]}) & (as={new_vertices[vertex][1]}) | "
             else:
                 content += f"(e1={new_vertices[vertex][0]}) & (e2={new_vertices[vertex][1]}) | "
