@@ -209,45 +209,6 @@ def is_deadlock_vertex(vertex: SsgVertex, transitions: dict[tuple[SsgVertex, str
     return True
 
 
-def create_extra_vert(vertices: set[SsgVertex], is_eve: bool, is_target: bool = False) -> SsgVertex:
-    """
-    Creates an extra vertex for an SSG set without adding it.
-    :param vertices: Set of vertices that the new vertex should not conflict with
-    :type vertices: set[SsgVertex]
-    :param is_eve: True if the new vertex is controlled by Eve, False if it is controlled by Adam
-    :type is_eve: bool
-    :param is_target: True if the new vertex is a target vertex, False otherwise
-    :type is_target: bool
-    :return: Newly created vertex
-    :rtype: SsgVertex
-    """
-    used_names = {v.name for v in vertices}
-    i = 1
-    while True:
-        new_name = f"extra{i}"
-        if new_name not in used_names:
-            break
-        i += 1
-
-    return SsgVertex(new_name, is_eve, is_target)
-
-
-def has_transition_end_vertex(transition: SsgTransition, end_vertex: SsgVertex) -> bool:
-    """
-    Checks if the given transition has an end vertex that matches the given end vertex.
-    :param transition: Transition to check
-    :type transition: SsgTransition
-    :param end_vertex: Vertex to check for in the transition's end vertices
-    :type end_vertex: SsgVertex
-    :return: Whether the transition has the end vertex
-    :rtype: bool
-    """
-    for prob, vertex in transition.end_vertices:
-        if vertex == end_vertex:
-            return True
-    return False
-
-
 def read_ssg_from_file(file_name, use_global_path: bool = False, debug: bool = GLOBAL_DEBUG) -> SimpleStochasticGame:
     """
     Reads a simple stochastic game from a file and returns the corresponding SimpleStochasticGame object.
