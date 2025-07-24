@@ -1,4 +1,5 @@
 # Imports
+import math
 import queue as pyqueue
 import random
 import time
@@ -11,7 +12,7 @@ from multiprocessing import Process, Manager
 from typing import Any
 
 from ssg_to_smg import check_target_reachability
-from stochasticparitygame import SpgVertex, SpgTransition, StochasticParityGame, read_spg_from_file
+from stochasticparitygame import SpgVertex, SpgTransition, StochasticParityGame, read_spg_from_file, spg_to_spgspec, save_spg_file
 from error_handling import print_error, print_debug, print_warning
 from spg_to_ssg_reduction import spg_to_ssg
 from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_property
@@ -183,7 +184,7 @@ def create_frozen_lake_spg(columns: int, rows: int, point0: tuple[int, int] | No
                 point1 = (random.randint(0, columns - 1), random.randint(0, rows - 1))
     field[point0[0]][point0[1]] = 0
     field[point1[0]][point1[1]] = 1
-    number_of_holes = int(columns * rows * share_of_holes)
+    number_of_holes = int((columns * rows - 2) * share_of_holes)
     holes = set()
     while number_of_holes > 0:
         x = random.randint(0, columns - 1)
@@ -567,10 +568,10 @@ def benchmark_frozen_lake(timeout: int = 3600, abort_when_alpha_underflow: bool 
     """
     benchmark_results = dict()
     with Manager() as manager:
-        for size in range(5, 11):
+        for size in range(1):
             q = manager.Queue()
 
-            p = Process(target=_iteration_worker, args=(q, (create_frozen_lake_spg, (size, size, None, None, 0.1, 0.5, 0.5)), False))
+            p = Process(target=_iteration_worker, args=(q, (create_frozen_lake_spg, (1, 3, (0, 0), (0, 2), 0.1, 0.5, 0.5)), False))
             start_time = time.perf_counter()
             if debug:
                 print_debug(f"Start creating frozen lake benchmark for size {size} by {size}...")
@@ -634,7 +635,7 @@ def benchmark_frozen_lake(timeout: int = 3600, abort_when_alpha_underflow: bool 
                     break
 
             q = manager.Queue()
-            p = Process(target=_iteration_worker, args=(q, (ssg_to_smgspec, (ssg, 1, True, False)), False))
+            p = Process(target=_iteration_worker, args=(q, (ssg_to_smgspec, (ssg, 1, True, True)), False))
             start_time = time.perf_counter()
             if debug:
                 print_debug(f"Start transforming frozen lake benchmark for size {size} by {size} to SMG...")
@@ -721,6 +722,9 @@ def benchmark_frozen_lake(timeout: int = 3600, abort_when_alpha_underflow: bool 
 
             result2 = result
             print(f"Probability of Eve winning when trying to win: {result2}")
+            from ssg_to_smg import create_dot_file, create_svg_file
+            create_dot_file(smg_file="temp.smg", dot_file="temp.dot", use_global_path=use_global_path, force=True)
+            create_svg_file(dot_file="temp.dot", svg_file="temp.svg", use_global_path=use_global_path, force=True, open_svg=True)
     return benchmark_results
 
 
@@ -773,6 +777,37 @@ def kill_process_and_children(pid: int) -> None:
         parent.kill()
     except psutil.NoSuchProcess:
         pass
+
+
+def create_random_spg_benchmark_set(number_of_vertices: list[int], share_of_outgoing_transitions: list[float], number_of_priorities: list[int]):
+    """
+    Creates a benchmark set of random SPGs with the specified parameters.
+    :param number_of_vertices: List of numbers of vertices for the random SPGs
+    :type number_of_vertices: list[int]
+    :param share_of_outgoing_transitions: List of shares of outgoing transitions for the random SPGs
+    :type share_of_outgoing_transitions: list[float]
+    :param number_of_priorities: List of numbers of priorities for the random SPGs
+    :type number_of_priorities: list[int]
+    """
+    already_created_combination = set()
+    for n_of_vertices in number_of_vertices:
+        for s_of_transitions in share_of_outgoing_transitions:
+            for n_of_priorities in number_of_priorities:
+                if (n_of_vertices, max(1, math.ceil(s_of_transitions * n_of_vertices)), n_of_priorities) in already_created_combination:
+                    print_debug(f"Skipping already created combination with {n_of_vertices} vertices, {max(1, math.ceil(s_of_transitions * n_of_vertices))} transitions and {n_of_priorities} priorities.")
+                    continue
+                if n_of_vertices <= 0 or s_of_transitions < 0 or n_of_priorities <= 0:
+                    print_debug(f"Skipping invalid combination: Vertices: {n_of_vertices}, Transitions: {max(1, math.ceil(s_of_transitions * n_of_vertices))}, Priorities: {n_of_priorities}")
+                    continue
+                if n_of_priorities > n_of_vertices:
+                    print_debug(f"Skipping combination with more priorities than vertices: Vertices: {n_of_vertices}, Transitions: {max(1, math.ceil(s_of_transitions * n_of_vertices))}, Priorities: {n_of_priorities}")
+                else:
+                    already_created_combination.add((n_of_vertices, max(1, math.ceil(s_of_transitions * n_of_vertices)), n_of_priorities))
+                    print_debug(f"Creating random SPG with {n_of_vertices} vertices, {max(1, math.ceil(s_of_transitions * n_of_vertices))} transitions and {n_of_priorities} priorities...")
+                    spg = create_random_spg(n_of_vertices, max(1, math.ceil(s_of_transitions * n_of_vertices)), n_of_priorities)
+                    spgspec = spg_to_spgspec(spg=spg, debug=False)
+                    save_spg_file(spg_spec=spgspec, file_name=os.path.join("benchmark_set_random_spg", f"random_spg_{n_of_vertices}_{max(1, math.ceil(s_of_transitions * n_of_vertices))}_{n_of_priorities}.spg"), use_global_path=True, force=True)
+                    print_debug("DONE")
 
 
 def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_transitions: list[float], number_of_priorities: list[int], spg_transformation_epsilon: list[float], prism_algorithm: list[str], ssg_to_smg_version: int = 1, timeout: int = 3600, abort_when_alpha_underflow=True, use_global_path=False, save_results: bool = True, debug=True) -> dict:
@@ -1093,13 +1128,14 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
 
 def main():
     """# benchmark_frozen_lake(3600, False, use_global_path=True, debug=True)"""
-    number_of_vertices = [2, 3, 8, 15, 32, 63, 128, 255, 512, 1023]
-    share_of_outgoing_transitions = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0]
-    number_of_priorities = [2, 8, 32]
-    spg_transformation_epsilon = [None, 1e-100, 1e-20, 1e-10, 1e-6, 1e-1]
-    prism_algorithm = ["-valiter", "-politer"]
-    benchmark_random_spgs(number_of_vertices, share_of_outgoing_transitions, number_of_priorities, spg_transformation_epsilon, prism_algorithm, ssg_to_smg_version=1, timeout=600, abort_when_alpha_underflow=False, use_global_path=True, debug=True, save_results=True)
-
+    number_of_vertices = [1023]  # [2, 3, 8, 15, 32, 63, 128, 255, 512, 1023]
+    share_of_outgoing_transitions = [1.0]  # [0.05, 0.1, 0.2, 0.5, 1.0] # leave out duplicates
+    number_of_priorities = [2, 4, 8, 32]
+    create_random_spg_benchmark_set(number_of_vertices=number_of_vertices, share_of_outgoing_transitions=share_of_outgoing_transitions, number_of_priorities=number_of_priorities)
+    #spg_transformation_epsilon = [None, 1e-6, 1e-2, 1e-1]
+    #prism_algorithm = ["-valiter", "-politer"]
+    #benchmark_random_spgs(number_of_vertices, share_of_outgoing_transitions, number_of_priorities, spg_transformation_epsilon, prism_algorithm, ssg_to_smg_version=1, timeout=600, abort_when_alpha_underflow=False, use_global_path=True, debug=True, save_results=True)
+    # spg = benchmark_frozen_lake(use_global_path=True, debug=True)
     print()
     """spg = create_frozen_lake_spg(columns=2, rows=2, point0=(0, 0), point1=(0, 1), share_of_holes=0)
     # spg = create_chain_spg(length=10, min_prob=0.5)
