@@ -1,9 +1,7 @@
 import random
 import os
 import matplotlib
-import posixpath
 import time
-import re
 import contextlib
 import io
 import queue as pyqueue
@@ -12,12 +10,10 @@ import math
 from multiprocessing import Process, Queue
 
 from benchmarking_global import kill_process_and_children
-from settings import IS_OS_LINUX
-from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability
+from ssg_to_smg import ssg_to_smgspec, save_smg_file, check_target_reachability, check_smg_stats
 from simplestochasticgame import SsgVertex, SsgTransition, SimpleStochasticGame, is_deadlock_vertex
 from error_handling import print_error, print_debug, print_warning
-from settings import GLOBAL_DEBUG, GLOBAL_IN_OUT_PATH_LINUX, GLOBAL_IN_OUT_PATH_WINDOWS, GLOBAL_IN_OUT_PATH, PRISM_PATH
-from shell_commands import run_command_linux, sh_escape
+from settings import GLOBAL_DEBUG,  GLOBAL_IN_OUT_PATH
 
 
 def make_float_list_from_string(s: str) -> list[float]:
@@ -270,42 +266,6 @@ def create_empty_ssg(number_of_vertices: int, debug: bool = GLOBAL_DEBUG) -> Sim
     if debug:
         print_debug(f"Created empty SSG with {len(vertices)} vertices and {len(transitions)} transitions in {time.time() - start_time:.2f} seconds.")
     return SimpleStochasticGame(vertices, transitions, init_vertex)
-
-
-def check_smg_stats(smg_file: str, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False) -> tuple[int, int, float]:
-    """
-    Check the statistics of an SMG file.
-    :param smg_file: Path to the SMG file
-    :type smg_file: str
-    :param debug: Whether to print debug information
-    :type debug: bool
-    :param use_global_path: Whether to use the global path for the SMG file
-    :type use_global_path: bool
-    """
-    if use_global_path:
-        if not IS_OS_LINUX:
-            smg_file_win = os.path.join(GLOBAL_IN_OUT_PATH_WINDOWS, smg_file)
-        smg_file = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, smg_file)
-    if IS_OS_LINUX:
-        if not os.path.exists(smg_file):
-            print_error(f"SMG file {smg_file} does not exist.")
-    else:
-        if not os.path.exists(smg_file_win):
-            print_error(f"SMG file {smg_file_win} does not exist.")
-    command = f"{sh_escape(PRISM_PATH)} {sh_escape(smg_file)} -noprobchecks"
-    if debug:
-        print_debug(f"Running command: {command}")
-    result = run_command_linux(command, use_shell=True)
-    if result.returncode != 0:
-        print_error(f"Error running command: {result.stderr}")
-    output = result.stdout
-    match = re.search(r'States:(\s|\t)*(\d+)', output)
-    states = int(match.group(2)) if match else -1
-    match = re.search(r'Transitions:(\s|\t)*(\d+)', output)
-    transitions = int(match.group(2)) if match else -1
-    match = re.search(r'Time for model construction:(\s|\t)*(\d+\.\d+)', output)
-    constr_time = float(match.group(2)) if match else "-1"
-    return states, transitions, constr_time
 
 
 def print_smg_stats(smg_file: str, debug: bool = GLOBAL_DEBUG, use_global_path: bool = False) -> None:
