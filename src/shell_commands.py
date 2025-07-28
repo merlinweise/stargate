@@ -79,5 +79,5 @@ def run_command_linux(command: str | list[str], use_shell: bool = True, debug: b
         if len(e.stderr) > 0:
             print_warning(f"Command {command} failed with error: {e.stderr}")
         else:
-            print_warning(f"Command {command} failed with error: {e.stdout}")
+            print_warning(f"Command {command} failed with error")
         return None

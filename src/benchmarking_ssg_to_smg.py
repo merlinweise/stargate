@@ -1032,7 +1032,7 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
         plt.close(fig)
 
     fig_stat, axs = plt.subplots(1, 2, figsize=(12, 6), num=plot_name + "_stats_comparison")
-    fig_stat.suptitle("Combined Benchmark Graph Statistics (Vertices vs. Transitions)")
+    fig_stat.suptitle("Combined Benchmark Graph Statistics (States vs. Transitions)")
     # Plot: Vertices
 
     axs[0].set_xscale('log')
@@ -1040,12 +1040,12 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
     for ssg_type in np.unique(ssg_type_array):
         mask = ssg_type_array == ssg_type
         axs[0].scatter(all_v1_v[mask], all_v2_v[mask], color=colors[ssg_type], label=labels[ssg_type])
-    axs[0].plot(all_v1_v, all_v1_v, linestyle='-', color='black', label=f'#v with v{v1} = #v with v{v1}')
+    axs[0].plot(all_v1_v, all_v1_v, linestyle='-', color='black', label=f'#s with v{v1} = #s with v{v2}')
     axs[0].plot(all_v1_v, 2 * all_v1_v, linestyle='--', color='#808080')
     axs[0].plot(all_v1_v, 0.5 * all_v1_v, linestyle='--', color='#808080')
-    axs[0].set_xlabel(f"v{v1} Vertices")
-    axs[0].set_ylabel(f"v{v1} Vertices")
-    axs[0].set_title(f"Vertices | v{v2} less vertices than v{v1} in {worse_v1_v_count / len(all_v1_v) * 100:.2f}% of the cases")
+    axs[0].set_xlabel(f"v{v1} States")
+    axs[0].set_ylabel(f"v{v2} States")
+    axs[0].set_title(f"States | v{v2} less states than v{v1} in {worse_v1_v_count / len(all_v1_v) * 100:.2f}% of the cases")
     axs[0].legend()
     axs[0].grid(True, which='major', ls='--')
 
@@ -1065,7 +1065,7 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
     axs[1].grid(True, which='major', ls='--')
 
     # --- Statistic Info ---
-    fig_stat.text(0.5, 0.01, f"v{v1} Vertices: μ={mean_v1_v:.2f}, σ={std_v1_v:.2f} | v{v2} Vertices: μ={mean_v2_v:.2f}, σ={std_v2_v:.2f} || v{v1} Transitions: μ={mean_v1_t:.2f}, σ={std_v1_t:.2f} | v{v2} Transitions: μ={mean_v2_t:.2f}, σ={std_v2_t:.2f}", ha='center', fontsize=9)
+    fig_stat.text(0.5, 0.01, f"v{v1} States: μ={mean_v1_v:.2f}, σ={std_v1_v:.2f} | v{v2} States: μ={mean_v2_v:.2f}, σ={std_v2_v:.2f} || v{v1} Transitions: μ={mean_v1_t:.2f}, σ={std_v1_t:.2f} | v{v2} Transitions: μ={mean_v2_t:.2f}, σ={std_v2_t:.2f}", ha='center', fontsize=9)
 
     fig_stat.tight_layout(rect=(0, 0.05, 1, 0.95))
     if save_plots:
@@ -1092,12 +1092,12 @@ def main():
     Adjustable main function that is executed when the script is run.
     """
     list_of_benchmark_results = []
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="random", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="random_no_additional_selfloops", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="binary", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="complete", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="chain", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="empty", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_binary_max_1200.txt"))
+    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_chain_max_1200.txt"))
+    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_complete_max_1200.txt"))
+    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_empty_max_1200.txt"))
+    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_random_max_1200.txt"))
+    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_random_no_additional_selfloops_max_1200.txt"))
     plot_combined_benchmark_results(list_of_benchmark_results, show_times=True, show_stats=True, plot_name="test_benchmark_exponential_combined", save_plots=True, use_global_path=True, versions=(1, 3))
 
 

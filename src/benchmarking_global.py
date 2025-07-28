@@ -489,7 +489,7 @@ def benchmark_chain_spgs_for_correctness(use_global_path: bool = False, debug: b
         ssg = spg_to_ssg(spg=spg, epsilon=1e-6, print_alphas=debug)
         smg_spec = ssg_to_smgspec(ssg=ssg, version=1, debug=False, print_correspondingvertices=False)
         save_smg_file(smg_spec, file_name="temp.smg", use_global_path=use_global_path, force=True)
-        result = check_target_reachability(smg_file="temp.smg", print_probabilities=False, use_global_path=use_global_path)
+        result = check_target_reachability(smg_file="temp.smg", print_probabilities=False, use_global_path=use_global_path, prism_solving_algorithm="-valiter")
         print("####################################################################################")
         print()
         print(f"Expected minimum probability of Eve winning with even parity for chain of length {2 ** i}: 1.0")
@@ -1126,29 +1126,266 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
     return benchmark_results
 
 
-def main():
-    """# benchmark_frozen_lake(3600, False, use_global_path=True, debug=True)"""
-    number_of_vertices = [1023]  # [2, 3, 8, 15, 32, 63, 128, 255, 512, 1023]
-    share_of_outgoing_transitions = [1.0]  # [0.05, 0.1, 0.2, 0.5, 1.0] # leave out duplicates
-    number_of_priorities = [2, 4, 8, 32]
-    create_random_spg_benchmark_set(number_of_vertices=number_of_vertices, share_of_outgoing_transitions=share_of_outgoing_transitions, number_of_priorities=number_of_priorities)
-    #spg_transformation_epsilon = [None, 1e-6, 1e-2, 1e-1]
-    #prism_algorithm = ["-valiter", "-politer"]
-    #benchmark_random_spgs(number_of_vertices, share_of_outgoing_transitions, number_of_priorities, spg_transformation_epsilon, prism_algorithm, ssg_to_smg_version=1, timeout=600, abort_when_alpha_underflow=False, use_global_path=True, debug=True, save_results=True)
-    # spg = benchmark_frozen_lake(use_global_path=True, debug=True)
-    print()
-    """spg = create_frozen_lake_spg(columns=2, rows=2, point0=(0, 0), point1=(0, 1), share_of_holes=0)
-    # spg = create_chain_spg(length=10, min_prob=0.5)
-    ssg = spg_to_ssg(spg=spg, epsilon=1e-6, print_alphas=True)
-    smg_spec = ssg_to_smgspec(ssg=ssg, version=1, debug=False, print_correspondingvertices=True)
-    save_smg_file(content=smg_spec, file_name="temp.smg", use_global_path=True, force=True)
-    from ssg_to_smg import create_dot_file, create_svg_file
-    check_target_reachability("temp.smg", print_probabilities=True, export_strategies=False, use_global_path=True, prism_solving_algorithm="-politer")
-    create_dot_file("temp.smg", "temp.dot", use_global_path=True, force=True)
-    create_svg_file("temp.dot", "temp.svg", use_global_path=True, force=True, open_svg=True)"""
-    """benchmark_own_examples_for_correctness(["own_example1.spg"], [(0.0, 1/3)], use_global_path=True, debug=False)"""
-    print()
+def make_key_str(key_tuple):
+    # key_tuple = (spg_comb, epsilon, *rest)
+    spg_comb, epsilon, *rest = key_tuple
+    # spg_comb als Tupel-String, epsilon als str (None als "None")
+    spg_comb_str = ",".join(str(x) for x in spg_comb)
+    epsilon_str = "None" if epsilon is None else str(epsilon)
+    rest_str = " | ".join(str(x) for x in rest)
+    if rest_str:
+        return f"{spg_comb_str} | {epsilon_str} | {rest_str}"
+    else:
+        return f"{spg_comb_str} | {epsilon_str}"
 
+
+def parse_key_str(key_str):
+    # key_str z.B. "1023,512,8 | 1e-06 | -valiter | property_check_time"
+    parts = [p.strip() for p in key_str.split("|")]
+    spg_comb_str = parts[0]
+    epsilon_str = parts[1] if len(parts) > 1 else None
+    rest = parts[2:] if len(parts) > 2 else []
+
+    # spg_comb ist Tuple aus ints
+    spg_comb = tuple(int(x) for x in spg_comb_str.split(","))
+    # epsilon ist float oder None
+    epsilon = None if epsilon_str == "None" else float(epsilon_str)
+    key = (spg_comb, epsilon, *rest)
+    return key
+
+
+def save_benchmark_results(benchmark_results: dict, filename: str):
+    # Umwandeln keys in Strings
+    serializable_dict = {}
+    for k, v in benchmark_results.items():
+        key_str = make_key_str(k)
+        serializable_dict[key_str] = v
+    with open(filename, "w") as f:
+        json.dump(serializable_dict, f, indent=2)
+
+
+def load_benchmark_results(filename: str):
+    try:
+        with open(filename, "r") as f:
+            raw_dict = json.load(f)
+        benchmark_results = {}
+        for k_str, v in raw_dict.items():
+            try:
+                key = parse_key_str(k_str)
+                benchmark_results[key] = v
+            except Exception as e:
+                print(f"Skipping invalid key: {k_str} | Reason: {e}")
+    except FileNotFoundError:
+        print_debug(f"File {filename} not found. Returning empty benchmark results.")
+        return {}
+    return benchmark_results
+
+
+def benchmark_stargate(epsilons: list[float], prism_algorithms: list[str], save_results: bool = True):
+    """
+    Benchmarks the already created SPGS in GLOBAL_IN_OUT_PATH/benchmark_set_random_spg and plots the results
+    :param epsilons: list of to be benchmarked epsilons
+    :type epsilons: list[float]
+    :param prism_algorithms: list of to be benchmarked prism algorithms
+    :type prism_algorithms: [str]
+    :param save_results: whether or not to save results to file
+    :type save_results: bool
+    """
+    result_file = os.path.join(GLOBAL_IN_OUT_PATH, "thesis_global_benchmarks.json")
+    benchmark_results = load_benchmark_results(result_file)
+
+    spg_combinations = []
+    with os.scandir(os.path.join(GLOBAL_IN_OUT_PATH, "benchmark_set_random_spg")) as entries:
+        for entry in entries:
+            if entry.is_file():
+                parts = entry.name.split("_")
+                if "random" in parts:
+                    parts.remove("random")
+                if "spg" in parts:
+                    parts.remove("spg")
+                parts[2] = parts[2][:-4]
+                spg_combinations.append(tuple(int(p) for p in parts))
+    spg_combinations.sort()
+
+    if not len(benchmark_results) == 2432:
+        for spg_combination in spg_combinations:
+            print_debug(f"||||> Start with combination {spg_combination}...")
+            spg = read_spg_from_file(os.path.join("benchmark_set_random_spg", f"random_spg_{spg_combination[0]}_{spg_combination[1]}_{spg_combination[2]}.spg"), use_global_path=True, debug=False)
+            for epsilon in epsilons:
+                if (spg_combination, epsilon, "transformation_time") in benchmark_results and (spg_combination, epsilon, "smgspec_size") in benchmark_results:
+                    print_debug(f"Skip transformation for {spg_combination}, ε={epsilon} (already computed)")
+                else:
+                    start_time = time.perf_counter()
+                    ssg = spg_to_ssg(spg=spg, epsilon=epsilon, print_alphas=False)
+                    print_debug(f"SSG with epsilon={epsilon} created")
+                    smgspec = ssg_to_smgspec(ssg=ssg, version=1, debug=False, print_correspondingvertices=False)
+                    transformation_time = time.perf_counter() - start_time
+                    smgspec_size = asizeof.asizeof(smgspec)
+                    print_debug(f"SMG created")
+                    save_smg_file(smg_spec=smgspec, file_name="temp.smg", force=True, debug=False, use_global_path=True)
+
+                    benchmark_results[spg_combination, epsilon, "transformation_time"] = transformation_time
+                    benchmark_results[spg_combination, epsilon, "smgspec_size"] = smgspec_size
+
+                for algorithm in prism_algorithms:
+                    if (spg_combination, epsilon, algorithm, "property_check_time") in benchmark_results:
+                        print_debug(f"Skip check_property for {spg_combination}, ε={epsilon}, alg={algorithm} (already computed)")
+                        continue
+
+                    q = multiprocessing.Manager().Queue()
+                    args = ("temp.smg", "<<eve>> Pmax=? [F \"target\"]", True, None, False, PRISM_PATH, MAX_ITERS,
+                            PRISM_EPSILON, algorithm)
+                    p = multiprocessing.Process(target=_iteration_worker, args=(q, (check_property, args), False))
+
+                    start_time = time.perf_counter()
+                    p.start()
+                    p.join(600)
+                    elapsed_time = time.perf_counter() - start_time
+
+                    if p.is_alive():
+                        kill_process_and_children(p.pid)
+                        p.join()
+                        print_debug(f"Timeout of 600 seconds with {'value iteration' if algorithm == '-valiter' else 'policy iteration'}")
+                        benchmark_results[spg_combination, epsilon, algorithm, "property_check_time"] = 600.0
+                    else:
+                        if not q.empty():
+                            result = q.get()
+                            if isinstance(result, Exception) or result is None:
+                                print_debug(f"Error with {'value iteration' if algorithm == '-valiter' else 'policy iteration'}")
+                                benchmark_results[spg_combination, epsilon, algorithm, "property_check_time"] = -1.0
+                            else:
+                                print_debug(f"Propery Check worked with {'value iteration' if algorithm == '-valiter' else 'policy iteration'}")
+                                benchmark_results[spg_combination, epsilon, algorithm, "property_check_time"] = elapsed_time
+                        else:
+                            print_debug(f"Error with {'value iteration' if algorithm == '-valiter' else 'policy iteration'}")
+                            benchmark_results[spg_combination, epsilon, algorithm, "property_check_time"] = -1.0
+
+                if save_results:
+                    save_benchmark_results(benchmark_results, result_file)
+    import io
+    import matplotlib
+    import contextlib
+    with contextlib.redirect_stdout(io.StringIO()):
+        matplotlib.use("TkAgg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    colors = plt.get_cmap("tab10")
+    epsilon_list = sorted(
+        set(e for (_, e, _, *_) in benchmark_results.keys()),
+        key=lambda x: float("inf") if x is None else x
+    )
+    epsilon_color_map = {eps: colors(i) for i, eps in enumerate(epsilon_list)}
+
+    comparison_dict = {}
+    for key, value in benchmark_results.items():
+        if len(key) == 4:
+            spg_comb, epsilon, algorithm, metric = key
+            if metric == "property_check_time":
+                dict_key = (spg_comb, epsilon)
+                if dict_key not in comparison_dict:
+                    comparison_dict[dict_key] = {}
+                comparison_dict[dict_key][algorithm] = value
+
+    comparison_points = []
+    for (spg_comb, epsilon), times in comparison_dict.items():
+        if "-valiter" in times and "-politer" in times:
+            x = times["-valiter"]
+            y = times["-politer"]
+            comparison_points.append((x, y, epsilon))
+    print(len(comparison_points))
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    for epsilon in epsilon_list:
+        x_vals = [x for x, y, e in comparison_points if e == epsilon]
+        y_vals = [y for x, y, e in comparison_points if e == epsilon]
+        ax.scatter(x_vals, y_vals, label=f"ε={epsilon}", color=epsilon_color_map[epsilon])
+    all_x = [x for x, y, e in comparison_points]
+    all_y = [y for x, y, e in comparison_points]
+
+    min_val = min(min(all_x), min(all_y))
+    max_val = max(max(all_x), max(all_y))
+
+    line_x = np.linspace(min_val, max_val, 100)
+
+    ax.plot(line_x, line_x, linestyle='-', color='black', label="Equal Time")
+    ax.plot(line_x, 2 * line_x, linestyle='--', color='#808080')
+    ax.plot(line_x, 0.5 * line_x, linestyle='--', color='#808080')
+
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("Value Iteration Time [s]")
+    ax.set_ylabel("Policy Iteration Time [s]")
+    policy_better_count = sum(1 for x, y, e in comparison_points if y < x)
+    total_count = len(comparison_points)
+    percent_policy_better = (policy_better_count / total_count) * 100 if total_count > 0 else 0
+    print(f"Policy Iteration war in {percent_policy_better:.2f}% der Fälle schneller als Value Iteration.")
+    ax.set_title(f"Policy vs Value Iteration Time\nPolicy Iteration faster in {percent_policy_better:.2f}% of cases")
+    ax.grid(True, which="major", linestyle="--")
+    ax.legend()
+    fig.tight_layout()
+    spg_size_dict = {spg_comb: spg_comb[0] + spg_comb[1] + spg_comb[2] for spg_comb in
+                     set(k[0] for k in benchmark_results.keys())}
+
+    # Farbenmap für epsilons
+    colors = plt.get_cmap("tab10")
+    unique_epsilons = sorted(
+        set(e for (_, e, _, *_) in benchmark_results.keys()),
+        key=lambda x: float('inf') if x is None else x
+    )
+    epsilon_color_map = {eps: colors(i % 10) for i, eps in enumerate(unique_epsilons)}
+
+    fig2, ax2 = plt.subplots(figsize=(8, 5))
+
+    for key, value in benchmark_results.items():
+        if len(key) == 4:
+            spg_comb, epsilon, algorithm, metric = key
+            if metric == "property_check_time":
+                trans_time = benchmark_results.get((spg_comb, epsilon, "transformation_time"), None)
+                if trans_time is None:
+                    continue
+                total_time = trans_time + value
+                x = spg_size_dict.get(spg_comb, None)
+                if x is None:
+                    continue
+                color = epsilon_color_map.get(epsilon, 'black')
+                marker = 'o' if algorithm == '-valiter' else ('s' if algorithm == '-politer' else 'x')
+                ax2.scatter(x, total_time, color=color, marker=marker, alpha=0.7,
+                            label=f"ε={epsilon}" if marker == 'o' else "")
+
+    handles = []
+    labels = []
+    for eps, col in epsilon_color_map.items():
+        handles.append(plt.Line2D([0], [0], marker='o', color='w', label=f"ε={eps}",
+                                  markerfacecolor=col, markersize=8))
+    labels = [f"ε={eps}" for eps in unique_epsilons]
+    ax2.legend(handles, labels, title="Epsilon (ε)", bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    valiter_marker = plt.Line2D([0], [0], marker='o', color='w', label='Value Iteration',
+                                markerfacecolor='gray', markersize=8)
+    politer_marker = plt.Line2D([0], [0], marker='s', color='w', label='Policy Iteration',
+                                markerfacecolor='gray', markersize=8)
+    ax2.legend(handles + [valiter_marker, politer_marker], labels + ['Value Iteration', 'Policy Iteration'],
+               title="Epsilon (ε) & Algorithm", bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    ax2.set_xscale('log')
+    ax2.set_yscale('log')
+    ax2.set_xlabel("#Vertices in SPG")
+    ax2.set_ylabel("Total Time (Transformation + Property Check) [s]")
+    ax2.set_title("Total Time vs. SPG Size")
+    ax2.grid(True, which='major', linestyle='--')
+    fig2.tight_layout()
+    plt.show()
+
+
+def main():
+    # number_of_vertices = [2, 3, 8, 15, 32, 63, 128, 255, 512, 1023]
+    # share_of_outgoing_transitions = [0.05, 0.1, 0.2, 0.5, 1.0]
+    # number_of_priorities = [2, 4, 8, 32]
+    # spg_transformation_epsilon = [None, 1e-6, 1e-2, 1e-1]
+    # prism_algorithm = ["-valiter", "-politer"]
+    benchmark_stargate([None, 1e-6, 1e-2, 1e-1], ["-valiter", "-politer"], True)
+    # benchmark_chain_spgs_for_correctness(True, True)
 
 if __name__ == '__main__':
     import multiprocessing

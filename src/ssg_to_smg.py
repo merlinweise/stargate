@@ -438,6 +438,9 @@ def check_property(smg_file, property_string, use_global_path: bool = False, str
     strategy_export = f" -exportstrat {sh_escape(strategy_filename)}" if strategy_filename is not None else ""
     command = f"{sh_escape(prism_path)} {sh_escape(smg_file)} -pf {sh_escape(property_string)} -maxiters {str(max_iters)} -epsilon {str(prism_epsilon)} {sh_escape(prism_solving_algorithm)}{strategy_export}" + (":type=actions" if strategy_filename is not None else "")
     result = run_command_linux(command=command, use_shell=True, debug=debug)
+    if result is None:
+        print_warning(f"Property {property_string} check failed. No result was returned.")
+        return None
     output = result.stdout
     match = re.search(r'Result:\s*(\d\.\d+(E-\d+)?)', output)
     if match:
@@ -500,7 +503,7 @@ def check_target_reachability(smg_file: str, print_probabilities: bool = False, 
         strategie_filename = "strat2.txt"
         if use_global_path:
             strategie_filename = posixpath.join(GLOBAL_IN_OUT_PATH_LINUX, strategie_filename)
-    result2 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmax=? [F \"target\"]", strategy_filename=strategie_filename, debug=debug)
+    result2 = check_property(smg_file=smg_file, property_string=f"<<eve>> Pmax=? [F \"target\"]", strategy_filename=strategie_filename, debug=debug, prism_path=prism_path, max_iters=max_iters, prism_epsilon=prism_epsilon, prism_solving_algorithm=prism_solving_algorithm)
     if debug:
         print_debug(f"Second prob checking time: {(time.perf_counter() - pre_prob2_time):.6f}")
     if result2 == -1.0:
