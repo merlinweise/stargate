@@ -1187,7 +1187,7 @@ def benchmark_stargate(epsilons: list[float], prism_algorithms: list[str], save_
     :param epsilons: list of to be benchmarked epsilons
     :type epsilons: list[float]
     :param prism_algorithms: list of to be benchmarked prism algorithms
-    :type prism_algorithms: [str]
+    :type prism_algorithms: list[str]
     :param save_results: whether or not to save results to file
     :type save_results: bool
     """
@@ -1270,13 +1270,25 @@ def benchmark_stargate(epsilons: list[float], prism_algorithms: list[str], save_
     import matplotlib.pyplot as plt
     import numpy as np
 
-    colors = plt.get_cmap("tab10")
-    epsilon_list = sorted(
-        set(e for (_, e, _, *_) in benchmark_results.keys()),
-        key=lambda x: float("inf") if x is None else x
-    )
-    epsilon_color_map = {eps: colors(i) for i, eps in enumerate(epsilon_list)}
+    # Parameters
+    ERROR_DISPLAY_VALUE = 1000
+    RED_LINE_LIMIT = 800
 
+    # --- Collect distinct values ---
+    vertex_counts = sorted(set(k[0][0] for k in benchmark_results if len(k) >= 3))
+    cmap = plt.get_cmap("viridis", len(vertex_counts))
+    vertex_color_map = {v: cmap(i) for i, v in enumerate(vertex_counts)}
+
+    raw_epsilons = set(e for (_, e, _, *_) in benchmark_results)
+    non_none_epsilons = sorted(e for e in raw_epsilons if e is not None)
+    if None in raw_epsilons:
+        epsilon_list = [None] + non_none_epsilons
+    else:
+        epsilon_list = non_none_epsilons
+    colors = plt.get_cmap("tab10")
+    epsilon_color_map = {eps: colors(i % 10) for i, eps in enumerate(epsilon_list)}
+
+    # --- Plot 1: Value Iteration vs. Policy Iteration Time (colored by SPG vertex count) ---
     comparison_dict = {}
     for key, value in benchmark_results.items():
         if len(key) == 4:
@@ -1290,91 +1302,100 @@ def benchmark_stargate(epsilons: list[float], prism_algorithms: list[str], save_
     comparison_points = []
     for (spg_comb, epsilon), times in comparison_dict.items():
         if "-valiter" in times and "-politer" in times:
-            x = times["-valiter"]
-            y = times["-politer"]
-            comparison_points.append((x, y, epsilon))
-    print(len(comparison_points))
+            raw_x = times["-valiter"]
+            raw_y = times["-politer"]
+            x = raw_x if raw_x != -1.0 else ERROR_DISPLAY_VALUE
+            y = raw_y if raw_y != -1.0 else ERROR_DISPLAY_VALUE
+            comparison_points.append((x, y, spg_comb[0], raw_x, raw_y))  # color by spg size
+
     fig, ax = plt.subplots(figsize=(8, 5))
+    for vc in vertex_counts:
+        x_vals = [x for x, y, v, _, _ in comparison_points if v == vc]
+        y_vals = [y for x, y, v, _, _ in comparison_points if v == vc]
+        ax.scatter(x_vals, y_vals, label=f"SPG Size = {vc}", color=vertex_color_map[vc], alpha=0.7)
 
-    for epsilon in epsilon_list:
-        x_vals = [x for x, y, e in comparison_points if e == epsilon]
-        y_vals = [y for x, y, e in comparison_points if e == epsilon]
-        ax.scatter(x_vals, y_vals, label=f"ε={epsilon}", color=epsilon_color_map[epsilon])
-    all_x = [x for x, y, e in comparison_points]
-    all_y = [y for x, y, e in comparison_points]
-
-    min_val = min(min(all_x), min(all_y))
-    max_val = max(max(all_x), max(all_y))
-
-    line_x = np.linspace(min_val, max_val, 100)
-
+    line_x = np.linspace(2, ERROR_DISPLAY_VALUE * 1.2, 100)
     ax.plot(line_x, line_x, linestyle='-', color='black', label="Equal Time")
-    ax.plot(line_x, 2 * line_x, linestyle='--', color='#808080')
-    ax.plot(line_x, 0.5 * line_x, linestyle='--', color='#808080')
+    ax.plot(line_x, 2 * line_x, linestyle='--', color='gray')
+    ax.plot(line_x, 0.5 * line_x, linestyle='--', color='gray')
+    ax.axhline(RED_LINE_LIMIT, color='red', linestyle=':', linewidth=1.5)
+    ax.axvline(RED_LINE_LIMIT, color='red', linestyle=':', linewidth=1.5)
 
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlabel("Value Iteration Time [s]")
     ax.set_ylabel("Policy Iteration Time [s]")
-    policy_better_count = sum(1 for x, y, e in comparison_points if y < x)
+
+    policy_better_count = sum(1 for x, y, _, _, _ in comparison_points if y < x)
     total_count = len(comparison_points)
     percent_policy_better = (policy_better_count / total_count) * 100 if total_count > 0 else 0
-    print(f"Policy Iteration war in {percent_policy_better:.2f}% der Fälle schneller als Value Iteration.")
-    ax.set_title(f"Policy vs Value Iteration Time\nPolicy Iteration faster in {percent_policy_better:.2f}% of cases")
-    ax.grid(True, which="major", linestyle="--")
-    ax.legend()
-    fig.tight_layout()
-    spg_size_dict = {spg_comb: spg_comb[0] + spg_comb[1] + spg_comb[2] for spg_comb in
-                     set(k[0] for k in benchmark_results.keys())}
+    ax.set_title(f"Policy vs Value Iteration\nPolicy faster in {percent_policy_better:.2f}% of cases")
 
-    # Farbenmap für epsilons
-    colors = plt.get_cmap("tab10")
-    unique_epsilons = sorted(
-        set(e for (_, e, _, *_) in benchmark_results.keys()),
-        key=lambda x: float('inf') if x is None else x
+    only_valiter_error = sum(1 for _, _, _, rx, ry in comparison_points if rx == -1.0 and ry != -1.0)
+    only_politer_error = sum(1 for _, _, _, rx, ry in comparison_points if ry == -1.0 and rx != -1.0)
+    both_error = sum(1 for _, _, _, rx, ry in comparison_points if rx == -1.0 and ry == -1.0)
+    error_text = (
+        f"Only Value Iteration failed: {only_valiter_error}    "
+        f"Only Policy Iteration failed: {only_politer_error}    "
+        f"Both failed: {both_error}"
     )
-    epsilon_color_map = {eps: colors(i % 10) for i, eps in enumerate(unique_epsilons)}
+    ax.text(0.5, -0.25, error_text, transform=ax.transAxes,
+            ha='center', va='top', fontsize=10)
 
+    ax.grid(True, which="major", linestyle="--")
+    ax.legend(title="SPG Vertex Count", bbox_to_anchor=(1.05, 1), loc='upper left')
+    fig.tight_layout()
+
+    # --- Plot 2: Transformation Time vs SPG Size (colored by epsilon) ---
+    spg_size_dict = {spg_comb: spg_comb[0] for spg_comb in set(k[0] for k in benchmark_results if len(k) >= 3)}
     fig2, ax2 = plt.subplots(figsize=(8, 5))
-
     for key, value in benchmark_results.items():
-        if len(key) == 4:
-            spg_comb, epsilon, algorithm, metric = key
-            if metric == "property_check_time":
-                trans_time = benchmark_results.get((spg_comb, epsilon, "transformation_time"), None)
-                if trans_time is None:
-                    continue
-                total_time = trans_time + value
+        if len(key) == 3:
+            spg_comb, epsilon, metric = key
+            if metric == "transformation_time":
                 x = spg_size_dict.get(spg_comb, None)
                 if x is None:
                     continue
                 color = epsilon_color_map.get(epsilon, 'black')
-                marker = 'o' if algorithm == '-valiter' else ('s' if algorithm == '-politer' else 'x')
-                ax2.scatter(x, total_time, color=color, marker=marker, alpha=0.7,
-                            label=f"ε={epsilon}" if marker == 'o' else "")
-
-    handles = []
-    labels = []
-    for eps, col in epsilon_color_map.items():
-        handles.append(plt.Line2D([0], [0], marker='o', color='w', label=f"ε={eps}",
-                                  markerfacecolor=col, markersize=8))
-    labels = [f"ε={eps}" for eps in unique_epsilons]
-    ax2.legend(handles, labels, title="Epsilon (ε)", bbox_to_anchor=(1.05, 1), loc='upper left')
-
-    valiter_marker = plt.Line2D([0], [0], marker='o', color='w', label='Value Iteration',
-                                markerfacecolor='gray', markersize=8)
-    politer_marker = plt.Line2D([0], [0], marker='s', color='w', label='Policy Iteration',
-                                markerfacecolor='gray', markersize=8)
-    ax2.legend(handles + [valiter_marker, politer_marker], labels + ['Value Iteration', 'Policy Iteration'],
-               title="Epsilon (ε) & Algorithm", bbox_to_anchor=(1.05, 1), loc='upper left')
+                ax2.scatter(x, value, color=color, marker='o', alpha=0.7)
 
     ax2.set_xscale('log')
     ax2.set_yscale('log')
-    ax2.set_xlabel("#Vertices in SPG")
-    ax2.set_ylabel("Total Time (Transformation + Property Check) [s]")
-    ax2.set_title("Total Time vs. SPG Size")
+    ax2.set_xlabel("SPG Size (#Vertices)")
+    ax2.set_ylabel("Transformation Time [s]")
+    ax2.set_title("Transformation Time vs. SPG Size")
     ax2.grid(True, which='major', linestyle='--')
+
+    handles_eps = [
+        plt.Line2D([0], [0], marker='o', color='w',
+                   label=f"ε={eps}" if eps is not None else "ε=None",
+                   markerfacecolor=col, markersize=8)
+        for eps, col in epsilon_color_map.items()
+    ]
+    ax2.legend(handles=handles_eps, title="Epsilon (ε)", bbox_to_anchor=(1.05, 1), loc='upper left')
     fig2.tight_layout()
+
+    # --- Plot 3: SMG Size vs SPG Size (colored by epsilon) ---
+    fig3, ax3 = plt.subplots(figsize=(8, 5))
+    for key, value in benchmark_results.items():
+        if len(key) == 3:
+            spg_comb, epsilon, metric = key
+            if metric == "smgspec_size":
+                x = spg_size_dict.get(spg_comb, None)
+                if x is None:
+                    continue
+                color = epsilon_color_map.get(epsilon, 'black')
+                ax3.scatter(x, value, color=color, marker='o', alpha=0.7)
+
+    ax3.set_xscale('log')
+    ax3.set_yscale('log')
+    ax3.set_xlabel("SPG Size (#Vertices)")
+    ax3.set_ylabel("SMG Object Size [Bytes]")
+    ax3.set_title("SMG Size vs. SPG Size")
+    ax3.grid(True, which='major', linestyle='--')
+    ax3.legend(handles=handles_eps, title="Epsilon (ε)", bbox_to_anchor=(1.05, 1), loc='upper left')
+    fig3.tight_layout()
+
     plt.show()
 
 
