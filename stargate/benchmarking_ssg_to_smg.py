@@ -481,7 +481,7 @@ def single_iteration_for_exponential_benchmark(ssg_type: str, i: int, use_global
     vert_v1, trans_v1, build_time1 = check_smg_stats(f"ssg_{i + 1}_v1.smg", use_global_path=use_global_path)
 
     start_v2 = time.perf_counter()
-    smg_v2 = ssg_to_smgspec(ssg_i, version=3)
+    smg_v2 = ssg_to_smgspec(ssg_i, version=2)
     trans_v2_time = time.perf_counter() - start_v2
     print_debug(f"Transformation with version2 took {trans_v2_time} seconds.")
     save_smg_file(smg_v2, f"ssg_{i + 1}_v2.smg", use_global_path=use_global_path, force=True)
@@ -1091,14 +1091,13 @@ def main():
     """
     Adjustable main function that is executed when the script is run.
     """
-    list_of_benchmark_results = []
-    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_binary_max_1200.txt"))
-    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_chain_max_1200.txt"))
-    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_complete_max_1200.txt"))
-    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_empty_max_1200.txt"))
-    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_random_max_1200.txt"))
-    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_random_no_additional_selfloops_max_1200.txt"))
-    plot_combined_benchmark_results(list_of_benchmark_results, show_times=True, show_stats=True, plot_name="test_benchmark_exponential_combined", save_plots=True, use_global_path=True, versions=(1, 3))
+    list_of_benchmark_results = [(benchmark_exponential_ssgs(ssg_type="random", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True))]
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="random_no_additional_selfloops", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="binary", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="complete", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="chain", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
+    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="empty", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
+    plot_combined_benchmark_results(list_of_benchmark_results, show_times=True, show_stats=True, plot_name="test_benchmark_exponential_combined", save_plots=True, use_global_path=True, versions=(1, 2))
 
 
 if __name__ == '__main__':

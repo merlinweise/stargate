@@ -512,9 +512,6 @@ def benchmark_mutex_spg_for_correctness(use_global_path: bool = False, debug: bo
     ssg = spg_to_ssg(spg=spg, epsilon=1e-6, print_alphas=debug)
     smg_spec = ssg_to_smgspec(ssg=ssg, version=1, debug=False, print_correspondingvertices=True)
     save_smg_file(smg_spec, file_name="temp.smg", use_global_path=use_global_path, force=True)
-    from src.ssg_to_smg import create_dot_file, create_svg_file
-    create_dot_file(smg_file="temp.smg", dot_file="temp.dot", use_global_path=use_global_path, force=True)
-    create_svg_file(dot_file="temp.dot", svg_file="temp.svg", use_global_path=use_global_path, force=True, open_svg=True)
     result = check_target_reachability(smg_file="temp.smg", print_probabilities=False, use_global_path=use_global_path)
     print("####################################################################################")
     print()
@@ -1126,10 +1123,15 @@ def benchmark_random_spgs(number_of_vertices: list[int], share_of_outgoing_trans
     return benchmark_results
 
 
-def make_key_str(key_tuple):
-    # key_tuple = (spg_comb, epsilon, *rest)
+def make_key_str(key_tuple: tuple) -> str:
+    """
+    Converts a key tuple into a string representation for serialization.
+    :param key_tuple: Key tuple to be converted
+    :type key_tuple: tuple
+    :return: string representation of the key tuple
+    :rtype: str
+    """
     spg_comb, epsilon, *rest = key_tuple
-    # spg_comb als Tupel-String, epsilon als str (None als "None")
     spg_comb_str = ",".join(str(x) for x in spg_comb)
     epsilon_str = "None" if epsilon is None else str(epsilon)
     rest_str = " | ".join(str(x) for x in rest)
@@ -1139,23 +1141,33 @@ def make_key_str(key_tuple):
         return f"{spg_comb_str} | {epsilon_str}"
 
 
-def parse_key_str(key_str):
-    # key_str z.B. "1023,512,8 | 1e-06 | -valiter | property_check_time"
+def parse_key_str(key_str: str) -> tuple:
+    """
+    Parses a string representation of a key into a tuple.
+    :param key_str: Key string to be parsed
+    :type key_str: str
+    :return: Tuple representation of the key string
+    :rtype: tuple
+    """
     parts = [p.strip() for p in key_str.split("|")]
     spg_comb_str = parts[0]
     epsilon_str = parts[1] if len(parts) > 1 else None
     rest = parts[2:] if len(parts) > 2 else []
-
-    # spg_comb ist Tuple aus ints
     spg_comb = tuple(int(x) for x in spg_comb_str.split(","))
-    # epsilon ist float oder None
+    # noinspection PyTypeChecker
     epsilon = None if epsilon_str == "None" else float(epsilon_str)
     key = (spg_comb, epsilon, *rest)
     return key
 
 
 def save_benchmark_results(benchmark_results: dict, filename: str):
-    # Umwandeln keys in Strings
+    """
+    Saves benchmark results to a JSON file.
+    :param benchmark_results: Results to be saved, where keys are tuples and values are the results
+    :type benchmark_results: dict
+    :param filename: Name of the file to save the results to
+    :type filename: str
+    """
     serializable_dict = {}
     for k, v in benchmark_results.items():
         key_str = make_key_str(k)
@@ -1164,7 +1176,14 @@ def save_benchmark_results(benchmark_results: dict, filename: str):
         json.dump(serializable_dict, f, indent=2)
 
 
-def load_benchmark_results(filename: str):
+def load_benchmark_results(filename: str) -> dict:
+    """
+    Loads benchmark results from a JSON file.
+    :param filename: Name of the JSON file to load the results from
+    :type filename: str
+    :return: Dictionary containing the benchmark results, where keys are tuples and values are the results
+    :rtype: dict
+    """
     try:
         with open(filename, "r") as f:
             raw_dict = json.load(f)
@@ -1271,8 +1290,8 @@ def benchmark_stargate(epsilons: list[float], prism_algorithms: list[str], save_
     import numpy as np
 
     # Parameters
-    ERROR_DISPLAY_VALUE = 1000
-    RED_LINE_LIMIT = 800
+    error_display_value = 1000
+    red_line_limit = 800
 
     # --- Collect distinct values ---
     vertex_counts = sorted(set(k[0][0] for k in benchmark_results if len(k) >= 3))
@@ -1304,8 +1323,8 @@ def benchmark_stargate(epsilons: list[float], prism_algorithms: list[str], save_
         if "-valiter" in times and "-politer" in times:
             raw_x = times["-valiter"]
             raw_y = times["-politer"]
-            x = raw_x if raw_x != -1.0 else ERROR_DISPLAY_VALUE
-            y = raw_y if raw_y != -1.0 else ERROR_DISPLAY_VALUE
+            x = raw_x if raw_x != -1.0 else error_display_value
+            y = raw_y if raw_y != -1.0 else error_display_value
             comparison_points.append((x, y, spg_comb[0], raw_x, raw_y))  # color by spg size
 
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -1314,12 +1333,12 @@ def benchmark_stargate(epsilons: list[float], prism_algorithms: list[str], save_
         y_vals = [y for x, y, v, _, _ in comparison_points if v == vc]
         ax.scatter(x_vals, y_vals, label=f"SPG Size = {vc}", color=vertex_color_map[vc], alpha=0.7)
 
-    line_x = np.linspace(2, ERROR_DISPLAY_VALUE * 1.2, 100)
+    line_x = np.linspace(2, error_display_value * 1.2, 100)
     ax.plot(line_x, line_x, linestyle='-', color='black', label="Equal Time")
     ax.plot(line_x, 2 * line_x, linestyle='--', color='gray')
     ax.plot(line_x, 0.5 * line_x, linestyle='--', color='gray')
-    ax.axhline(RED_LINE_LIMIT, color='red', linestyle=':', linewidth=1.5)
-    ax.axvline(RED_LINE_LIMIT, color='red', linestyle=':', linewidth=1.5)
+    ax.axhline(red_line_limit, color='red', linestyle=':', linewidth=1.5)
+    ax.axvline(red_line_limit, color='red', linestyle=':', linewidth=1.5)
 
     ax.set_xscale("log")
     ax.set_yscale("log")

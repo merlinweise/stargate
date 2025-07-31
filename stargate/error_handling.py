@@ -1,5 +1,6 @@
 import sys
 from fractions import Fraction
+from settings import MAX_DENOMINATOR
 
 
 def print_warning(reason: str) -> None:
@@ -39,7 +40,7 @@ def is_float_expr(s: str) -> bool:
     :rtype: bool
     """
     try:
-        if not all(c in "0123456789+*-/(). " for c in s):
+        if not all(c in "0123456789+*-/(). e" for c in s):
             return False
         result = eval(s)
         return isinstance(result, (int, float))
@@ -47,7 +48,7 @@ def is_float_expr(s: str) -> bool:
         return False
 
 
-def float_or_fraction(f: float, max_d: int) -> str:
+def float_or_fraction(f: float, max_d: int = MAX_DENOMINATOR) -> str:
     """
     Convert a float to a string representation, either as a float or as a fraction depending on the better representation.
     :param f: Float to convert

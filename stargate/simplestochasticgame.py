@@ -3,7 +3,7 @@ import re
 import time
 
 from fractions import Fraction
-from error_handling import print_warning, print_error, print_debug, is_float_expr, float_or_fraction
+from error_handling import print_warning, print_error, print_debug, is_float_expr
 from settings import GLOBAL_DEBUG, PRINT_VERTEX_CREATION_WARNINGS, ENSURE_EVE_AND_ADAM_VERTICES, GLOBAL_IN_OUT_PATH, USE_EXACT_ARITHMETIC, MAX_DENOMINATOR
 
 
@@ -396,7 +396,7 @@ def ssg_to_ssgspec(ssg: SimpleStochasticGame) -> str:
         else:
             transition_str = f"\t{vert_act[0].name} {vert_act[1]} : "
             for end_vert in trans.end_vertices:
-                transition_str += f"{float_or_fraction(end_vert[0], 100000)} | {end_vert[1].name} + "
+                transition_str += f"{end_vert[0]} | {end_vert[1].name} + "
             transition_str = transition_str[:-3] + "\n"
             content += transition_str
     content += "endtransitions"

@@ -28,7 +28,7 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version: int = SSG_TO_SMG_VERSION,
     """
     if debug:
         start_time = time.perf_counter()
-    content = "smg\n\n"
+    content = ["smg\n\n"]
     if version == 1 or version == 2:
         ssg = copy.deepcopy(ssg)
         i = 1
@@ -182,13 +182,13 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version: int = SSG_TO_SMG_VERSION,
                 new_transitions[transition] = (new_vertices[transition.start_vertex], new_adam_actions[transition.action], set())
                 for prob, vert in transition.end_vertices:
                     new_transitions[transition][2].add((prob, new_vertices[vert]))
-        content += "player eve\n\tevemod"
+        content.append("player eve\n\tevemod")
         for act in new_eve_actions.values():
-            content += f", [{act}]"
-        content += "\nendplayer\n\nplayer adam\n\tadammod"
+            content.append(f", [{act}]")
+        content.append("\nendplayer\n\nplayer adam\n\tadammod")
         for act in new_adam_actions.values():
-            content += f", [{act}]"
-        content += "\nendplayer\n\n"
+            content.append(f", [{act}]")
+        content.append("\nendplayer\n\n")
         eve_mod = [f"module evemod\n\tes : [0..{max(1, eve_vert_count-1)}] init {new_init_vertex[0]} ;\n"]
         adam_mod = [f"module adammod\n\tas : [0..{max(1, adam_vert_count-1)}] init {new_init_vertex[1]} ;\n"]
         for transition in new_transitions:
@@ -220,7 +220,11 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version: int = SSG_TO_SMG_VERSION,
                         eve_mod.append(f"({prob}) : (es'={vert[0]}) + ")
                     eve_mod[-1] = eve_mod[-1][:-3] + " ;\n"
                 adam_mod.append(f"\t[{new_adam_actions[transition.action]}] (es={new_transitions[transition][0][0]} & as={new_transitions[transition][0][1]}) \t-> (as'=0) ;\n")
-        content += "".join(eve_mod) + "endmodule\n\n" + "".join(adam_mod) + "endmodule"
+        content.extend(eve_mod)
+        content.append("endmodule\n\n")
+        content.extend(adam_mod)
+        content.append("endmodule")
+
     else:
         new_vertices: dict[SsgVertex, tuple[int, int]] = dict()
         ssg_eve_actions: set[str] = set()
@@ -261,75 +265,78 @@ def ssg_to_smgspec(ssg: SimpleStochasticGame, version: int = SSG_TO_SMG_VERSION,
                 new_transitions[transition] = (new_vertices[transition.start_vertex], new_adam_actions[transition.action], set())
                 for prob, vert in transition.end_vertices:
                     new_transitions[transition][2].add((prob, new_vertices[vert]))
-        content += "player eve\n\tevemod"
+        content.append("player eve\n\tevemod")
         for act in new_eve_actions.values():
-            content += f", [{act}]"
+            content.append(f", [{act}]")
         eve_prob_act = has_eve_probabilistic_actions(ssg)
         adam_prob_act = has_adam_probabilistic_actions(ssg)
         if eve_prob_act:
-            content += ", [ep]"
-        content += "\nendplayer\n\nplayer adam\n\tadammod"
+            content.append(", [ep]")
+        content.append("\nendplayer\n\nplayer adam\n\tadammod")
         for act in new_adam_actions.values():
-            content += f", [{act}]"
+            content.append(f", [{act}]")
         if adam_prob_act:
-            content += ", [ap]"
-        content += "\nendplayer\n\n"
-        eve_mod = f"module evemod\n\te1 : [0..{max(1, eve_vert_count-1)}] init {new_init_vertex[0]} ;\n\te2 : [0..{max(1, adam_vert_count-1)}] init {new_init_vertex[1]} ;\n"
+            content.append(", [ap]")
+        content.append("\nendplayer\n\n")
+        eve_mod = [f"module evemod\n\te1 : [0..{max(1, eve_vert_count-1)}] init {new_init_vertex[0]} ;\n\te2 : [0..{max(1, adam_vert_count-1)}] init {new_init_vertex[1]} ;\n"]
         if eve_prob_act:
-            eve_mod += f"\tre : [0..1] init 0 ;\n"
-        adam_mod = f"module adammod\n\ta1 : [0..{max(1, eve_vert_count-1)}] init {new_init_vertex[0]} ;\n\ta2 : [0..{max(1, adam_vert_count-1)}] init {new_init_vertex[1]} ;\n"
+            eve_mod.append(f"\tre : [0..1] init 0 ;\n")
+        adam_mod = [f"module adammod\n\ta1 : [0..{max(1, eve_vert_count-1)}] init {new_init_vertex[0]} ;\n\ta2 : [0..{max(1, adam_vert_count-1)}] init {new_init_vertex[1]} ;\n"]
         if adam_prob_act:
-            adam_mod += f"\tra : [0..1] init 0 ;\n"
+            adam_mod.append("\tra : [0..1] init 0 ;\n")
         rande_extra = " & re=0" if eve_prob_act else ""
         randa_extra = " & ra=0" if adam_prob_act else ""
         for transition in new_transitions:
             if transition.start_vertex.is_eve:
                 if not is_ssg_vertex_probabilistic(ssg, transition.start_vertex):
-                    eve_mod += f"\t[{new_eve_actions[transition.action]}] (e1={new_transitions[transition][0][0]} & e2={new_transitions[transition][0][1]}" + rande_extra + f") \t-> (e1'={next(iter(new_transitions[transition][2]))[1][0]}) & (e2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n"
-                    adam_mod += f"\t[{new_eve_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]}" + rande_extra + f") \t-> (a1'={next(iter(new_transitions[transition][2]))[1][0]}) & (a2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n"
+                    eve_mod.append(f"\t[{new_eve_actions[transition.action]}] (e1={new_transitions[transition][0][0]} & e2={new_transitions[transition][0][1]}" + rande_extra + f") \t-> (e1'={next(iter(new_transitions[transition][2]))[1][0]}) & (e2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n")
+                    adam_mod.append(f"\t[{new_eve_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]}" + rande_extra + f") \t-> (a1'={next(iter(new_transitions[transition][2]))[1][0]}) & (a2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n")
                 else:
                     if len(transition.end_vertices) == 1:
-                        eve_mod += f"\t[{new_eve_actions[transition.action]}] (e1={new_transitions[transition][0][0]} & e2={new_transitions[transition][0][1]} & re=0) \t-> (e1'={next(iter(new_transitions[transition][2]))[1][0]}) & (e2'={next(iter(new_transitions[transition][2]))[1][1]}) & (re'=1) ;\n"
+                        eve_mod.append(f"\t[{new_eve_actions[transition.action]}] (e1={new_transitions[transition][0][0]} & e2={new_transitions[transition][0][1]} & re=0) \t-> (e1'={next(iter(new_transitions[transition][2]))[1][0]}) & (e2'={next(iter(new_transitions[transition][2]))[1][1]}) & (re'=1) ;\n")
                     else:
-                        eve_mod += f"\t[{new_eve_actions[transition.action]}] (e1={new_transitions[transition][0][0]} & e2={new_transitions[transition][0][1]} & re=0) \t-> "
+                        eve_mod.append(f"\t[{new_eve_actions[transition.action]}] (e1={new_transitions[transition][0][0]} & e2={new_transitions[transition][0][1]} & re=0) \t-> ")
                         for prob, vert in new_transitions[transition][2]:
-                            eve_mod += f"({prob}) : (e1'={vert[0]}) & (e2'={vert[1]}) & (re'=1) + "
-                        eve_mod = eve_mod[:-3] + " ;\n"
-                    adam_mod += f"\t[{new_eve_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]} & re=0) \t-> true ;\n"
+                            eve_mod.append(f"({prob}) : (e1'={vert[0]}) & (e2'={vert[1]}) & (re'=1) + ")
+                        eve_mod[-1] = eve_mod[-1][:-3] + " ;\n"
+                    adam_mod.append(f"\t[{new_eve_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]} & re=0) \t-> true ;\n")
             else:
                 if not is_ssg_vertex_probabilistic(ssg, transition.start_vertex):
-                    adam_mod += f"\t[{new_adam_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]}" + randa_extra + f") \t-> (a1'={next(iter(new_transitions[transition][2]))[1][0]}) & (a2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n"
-                    eve_mod += f"\t[{new_adam_actions[transition.action]}] (e1={new_transitions[transition][0][0]} & e2={new_transitions[transition][0][1]}" + rande_extra + f") \t-> (e1'={next(iter(new_transitions[transition][2]))[1][0]}) & (e2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n"
+                    adam_mod.append(f"\t[{new_adam_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]}" + randa_extra + f") \t-> (a1'={next(iter(new_transitions[transition][2]))[1][0]}) & (a2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n")
+                    eve_mod.append(f"\t[{new_adam_actions[transition.action]}] (e1={new_transitions[transition][0][0]} & e2={new_transitions[transition][0][1]}" + rande_extra + f") \t-> (e1'={next(iter(new_transitions[transition][2]))[1][0]}) & (e2'={next(iter(new_transitions[transition][2]))[1][1]}) ;\n")
                 else:
                     if len(transition.end_vertices) == 1:
-                        adam_mod += f"\t[{new_adam_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]} & ra=0) \t-> (a1'={next(iter(new_transitions[transition][2]))[1][0]}) & (a2'={next(iter(new_transitions[transition][2]))[1][1]}) & (ra'=1) ;\n"
+                        adam_mod.append(f"\t[{new_adam_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]} & ra=0) \t-> (a1'={next(iter(new_transitions[transition][2]))[1][0]}) & (a2'={next(iter(new_transitions[transition][2]))[1][1]}) & (ra'=1) ;\n")
                     else:
-                        adam_mod += f"\t[{new_adam_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]} & ra=0) \t-> "
+                        adam_mod.append(f"\t[{new_adam_actions[transition.action]}] (a1={new_transitions[transition][0][0]} & a2={new_transitions[transition][0][1]} & ra=0) \t-> ")
                         for prob, vert in new_transitions[transition][2]:
-                            adam_mod += f"({prob}) : (a1'={vert[0]}) & (a2'={vert[1]}) & (ra'=1) + "
-                        adam_mod = adam_mod[:-3] + " ;\n"
+                            adam_mod.append(f"({prob}) : (a1'={vert[0]}) & (a2'={vert[1]}) & (ra'=1) + ")
+                        adam_mod[-1] = adam_mod[-1][:-3] + " ;\n"
                     eve_mod += f"\t[{new_adam_actions[transition.action]}] (e1={new_transitions[transition][0][0]} & e2={new_transitions[transition][0][1]} & ra=0) \t-> true ;\n"
         if has_eve_probabilistic_actions(ssg):
-            eve_mod += f"\t[ep] (re=1) \t\t\t-> (re' = 0) ;\n"
-            adam_mod += f"\t[ep] (re=1) \t\t\t-> (a1'= e1) & (a2' = e2) ;\n"
+            eve_mod.append(f"\t[ep] (re=1) \t\t\t-> (re' = 0) ;\n")
+            adam_mod.append(f"\t[ep] (re=1) \t\t\t-> (a1'= e1) & (a2' = e2) ;\n")
         if has_adam_probabilistic_actions(ssg):
-            adam_mod += f"\t[ap] (ra=1) \t\t\t-> (ra' = 0) ;\n"
-            eve_mod += f"\t[ap] (ra=1) \t\t\t-> (e1' = a1) & (e2' = a2) ;\n"
-        content += eve_mod + "endmodule\n\n" + adam_mod + "endmodule"
-    content += "\n\nlabel \"target\" = ("
+            adam_mod.append(f"\t[ap] (ra=1) \t\t\t-> (ra' = 0) ;\n")
+            eve_mod.append(f"\t[ap] (ra=1) \t\t\t-> (e1' = a1) & (e2' = a2) ;\n")
+        content.extend(eve_mod)
+        content.append("endmodule\n\n")
+        content.extend(adam_mod)
+        content.append("endmodule")
+    content.append("\n\nlabel \"target\" = (")
     for vertex in ssg.vertices.values():
         if vertex.is_target:
             if version == 1 or version == 2:
-                content += f"(es={new_vertices[vertex][0]}) & (as={new_vertices[vertex][1]}) | "
+                content.append(f"(es={new_vertices[vertex][0]}) & (as={new_vertices[vertex][1]}) | ")
             else:
-                content += f"(e1={new_vertices[vertex][0]}) & (e2={new_vertices[vertex][1]}) | "
-    if content[-1:] == "(":
-        content = content[:-1] + "false;"
+                content.append(f"(e1={new_vertices[vertex][0]}) & (e2={new_vertices[vertex][1]}) | ")
+    if content[-1][-1:] == "(":
+        content[-1] = content[-1][:-1] + "false;"
     else:
-        content = content[:-3] + ");"
+        content[-1] = content[-1][:-3] + ");"
     if debug:
         print_debug(f"SMG specification created in {(time.perf_counter() - start_time):.6f} seconds with version {1 if version else 2}")
-    return content
+    return "".join(content)
 
 
 def is_ssg_vertex_probabilistic(ssg: SimpleStochasticGame, state: SsgVertex) -> bool:
@@ -406,7 +413,7 @@ def sanity_check_alternating_vertices(ssg: SimpleStochasticGame) -> bool:
     return True
 
 
-def check_property(smg_file, property_string, use_global_path: bool = False, strategy_filename: str = None, debug: bool = GLOBAL_DEBUG, prism_path: str = PRISM_PATH, max_iters: int = MAX_ITERS, prism_epsilon: float = PRISM_EPSILON, prism_solving_algorithm: str = PRISM_SOLVING_ALGORITHM) -> float:
+def check_property(smg_file, property_string, use_global_path: bool = False, strategy_filename: str = None, debug: bool = GLOBAL_DEBUG, prism_path: str = PRISM_PATH, max_iters: int = MAX_ITERS, prism_epsilon: float = PRISM_EPSILON, prism_solving_algorithm: str = PRISM_SOLVING_ALGORITHM) -> float | None:
     """
     Checks a property of the given SMG file using PRISM-games.
     :param smg_file: SMG file to check
@@ -428,7 +435,7 @@ def check_property(smg_file, property_string, use_global_path: bool = False, str
     :param prism_solving_algorithm: Algorithm to use for solving the PRISM model, defaults to PRISM_SOLVING_ALGORITHM
     :type prism_solving_algorithm: str
     :return: Resulting probability of the property, or -1.0 if the check failed
-    :rtype: float
+    :rtype: float | None
     """
     if debug:
         start_time = time.perf_counter()

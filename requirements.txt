@@ -1,0 +1,4 @@
+matplotlib==3.10.3
+numpy==2.3.2
+psutil==7.0.0
+pympler==1.1

@@ -1,8 +1,8 @@
 import os
 import subprocess
+import sys
 
 from path_conversion import windows_to_linux_path
-from error_handling import print_error
 
 USE_EXACT_ARITHMETIC = False  # If True, replaces floats with exact arithmetic (fractions), default is True
 MAX_DENOMINATOR = 2_147_483_647  # 2,147,483,647 is the optimal value for PRISM-games
@@ -24,7 +24,8 @@ PRISM_SOLVING_ALGORITHM = "POLICY_ITERATION"  # "VALUE_ITERATION" or "GAUSS_SEID
 # ---------------------------------------------Automatic Settings-------------------------------------------------------
 
 if GLOBAL_IN_OUT_PATH_LINUX == "" and GLOBAL_IN_OUT_PATH_WINDOWS == "":
-    print_error("Global input/output path is not set. Please set GLOBAL_IN_OUT_PATH_LINUX or GLOBAL_IN_OUT_PATH_WINDOWS.")
+    print("Global input/output path is not set. Please set GLOBAL_IN_OUT_PATH_LINUX or GLOBAL_IN_OUT_PATH_WINDOWS.")
+    sys.exit(1)
 if GLOBAL_IN_OUT_PATH_LINUX == "":
     GLOBAL_IN_OUT_PATH_LINUX = windows_to_linux_path(GLOBAL_IN_OUT_PATH_WINDOWS)
 
