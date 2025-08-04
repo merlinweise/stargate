@@ -1291,7 +1291,7 @@ def benchmark_stargate(epsilons: list[float], prism_algorithms: list[str], save_
 
     # Parameters
     error_display_value = 1000
-    red_line_limit = 800
+    red_line_limit = 600
 
     # --- Collect distinct values ---
     vertex_counts = sorted(set(k[0][0] for k in benchmark_results if len(k) >= 3))
@@ -1333,11 +1333,11 @@ def benchmark_stargate(epsilons: list[float], prism_algorithms: list[str], save_
         y_vals = [y for x, y, v, _, _ in comparison_points if v == vc]
         ax.scatter(x_vals, y_vals, label=f"SPG Size = {vc}", color=vertex_color_map[vc], alpha=0.7)
 
-    line_x = np.linspace(2, error_display_value * 1.2, 100)
+    line_x = np.linspace(2, red_line_limit, 100)
     ax.plot(line_x, line_x, linestyle='-', color='black', label="Equal Time")
     ax.plot(line_x, 2 * line_x, linestyle='--', color='gray')
     ax.plot(line_x, 0.5 * line_x, linestyle='--', color='gray')
-    ax.axhline(red_line_limit, color='red', linestyle=':', linewidth=1.5)
+    ax.axhline(red_line_limit, color='red', linestyle=':', linewidth=1.5, label="Timeout of 600s")
     ax.axvline(red_line_limit, color='red', linestyle=':', linewidth=1.5)
 
     ax.set_xscale("log")
