@@ -925,23 +925,6 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
     colors = {"random": 'red', "random_no_additional_selfloops": 'orange', "binary": 'green', "complete": 'blue', "chain": 'purple', "empty": 'gray'}
     labels = {"random": 'Random', "random_no_additional_selfloops": 'Random (No Additional Self-Loops)', "binary": 'Binary Tree', "complete": 'Complete Graph', "chain": 'Chain', "empty": 'Empty'}
 
-    mean_v1_tt = np.mean(all_v1_tt)
-    std_v1_tt = np.std(all_v1_tt)
-    mean_v2_tt = np.mean(all_v2_tt)
-    std_v2_tt = np.std(all_v2_tt)
-    mean_v1_pt = np.mean(all_v1_pt)
-    std_v1_pt = np.std(all_v1_pt)
-    mean_v2_pt = np.mean(all_v2_pt)
-    std_v2_pt = np.std(all_v2_pt)
-    mean_v1_v = np.mean(all_v1_v)
-    std_v1_v = np.std(all_v1_v)
-    mean_v2_v = np.mean(all_v2_v)
-    std_v2_v = np.std(all_v2_v)
-    mean_v1_t = np.mean(all_v1_t)
-    std_v1_t = np.std(all_v1_t)
-    mean_v2_t = np.mean(all_v2_t)
-    std_v2_t = np.std(all_v2_t)
-
     worse_v1_tt_count = 0
     for i in range(len(all_v1_tt)):
         if all_v1_tt[i] > all_v2_tt[i]:
@@ -978,126 +961,88 @@ def plot_combined_benchmark_results(benchmarks_results: list[tuple[list[float], 
         else:
             raise ValueError("No benchmarks results provided to plot.")
 
-    fig, axs = plt.subplots(1, 2, figsize=(12, 6), num=plot_name + "_time_comparison")
-    fig.suptitle("Combined Benchmark Transformation vs. Property Checking Time")
+    import matplotlib.pyplot as plt
 
-    # --- Plot 1: Transformation Time ---
-    axs[0].set_xscale('log')
-    axs[0].set_yscale('log')
-    for ssg_type in np.unique(ssg_type_array):
-        mask = ssg_type_array == ssg_type
-        axs[0].scatter(all_v1_tt[mask], all_v2_tt[mask], color=colors[ssg_type], label=labels[ssg_type])
-    axs[0].plot(all_v1_tt, all_v1_tt, linestyle='-', color='black', label=f'v{v1} and v{v2} equal')
-    axs[0].plot(all_v1_tt, 2 * all_v1_tt, linestyle='--', color='#808080')
-    axs[0].plot(all_v1_tt, 0.5 * all_v1_tt, linestyle='--', color='#808080')
-    axs[0].set_xlabel(f"v{v1} Transformation Time [s]")
-    axs[0].set_ylabel(f"v{v2} Transformation Time [s]")
-    axs[0].grid(True, which='major', ls='--')
-    axs[0].legend()
-    axs[0].set_title(f"Transformation | v{v2} better in {worse_v1_tt_count / len(all_v1_tt) * 100:.2f}%")
+    # --- Plot 1 ---
+    fig = plt.figure(figsize=(6, 6))
+    plt.xscale('log')
+    plt.yscale('log')
+    for ssg in np.unique(ssg_type_array):
+        mask = ssg_type_array == ssg
+        plt.scatter(all_v1_tt[mask], all_v2_tt[mask], color=colors[ssg], label=labels[ssg])
+    plt.plot(all_v1_tt, all_v1_tt, linestyle='-', color='black')
+    plt.plot(all_v1_tt, 2 * all_v1_tt, linestyle='--', color='#808080')
+    plt.plot(all_v1_tt, 0.5 * all_v1_tt, linestyle='--', color='#808080')
+    plt.xlabel(f"v{v1} Transformation Time [s]")
+    plt.ylabel(f"v{v2} Transformation Time [s]")
+    plt.grid(True, which='major', ls='--')
+    plt.legend()
+    plt.title(f"Transformation | v{v2} better in {worse_v1_tt_count / len(all_v1_tt) * 100:.2f}%")
+    plt.tight_layout()
 
-    # --- Plot 2: Property Checking Time ---
-    axs[1].set_xscale('log')
-    axs[1].set_yscale('log')
-    for ssg_type in np.unique(ssg_type_array):
-        mask = ssg_type_array == ssg_type
-        axs[1].scatter(all_v1_pt[mask], all_v2_pt[mask], color=colors[ssg_type], label=labels[ssg_type])
-    axs[1].plot(all_v1_pt, all_v1_pt, linestyle='-', color='black', label=f'v{v1} and v{v2} equal')
-    axs[1].plot(all_v1_pt, 2 * all_v1_pt, linestyle='--', color='#808080')
-    axs[1].plot(all_v1_pt, 0.5 * all_v1_pt, linestyle='--', color='#808080')
-    axs[1].set_xlabel(f"v{v1} Property Checking Time [s]")
-    axs[1].set_ylabel(f"v{v2} Property Checking Time [s]")
-    axs[1].grid(True, which='major', ls='--')
-    axs[1].legend()
-    axs[1].set_title(f"Property Check | v{v2} better in {worse_v1_pc_count / len(all_v1_pt) * 100:.2f}%")
+    # --- Plot 2 ---
+    fig = plt.figure(figsize=(6, 6))
+    plt.xscale('log')
+    plt.yscale('log')
+    for ssg in np.unique(ssg_type_array):
+        mask = ssg_type_array == ssg
+        plt.scatter(all_v1_pt[mask], all_v2_pt[mask], color=colors[ssg], label=labels[ssg])
+    plt.plot(all_v1_pt, all_v1_pt, linestyle='-', color='black')
+    plt.plot(all_v1_pt, 2 * all_v1_pt, linestyle='--', color='#808080')
+    plt.plot(all_v1_pt, 0.5 * all_v1_pt, linestyle='--', color='#808080')
+    plt.xlabel(f"v{v1} Property Checking Time [s]")
+    plt.ylabel(f"v{v2} Property Checking Time [s]")
+    plt.grid(True, which='major', ls='--')
+    plt.legend()
+    plt.title(f"Property Check | v{v2} better in {worse_v1_pc_count / len(all_v1_pt) * 100:.2f}%")
+    plt.tight_layout()
 
-    # --- Statistic Info ---
-    fig.text(0.5, 0.01, f"v{v1} TT: μ={mean_v1_tt:.5f}, σ={std_v1_tt:.5f} | v{v2} TT: μ={mean_v2_tt:.5f}, σ={std_v2_tt:.5f} || v{v1} PT: μ={mean_v1_pt:.5f}, σ={std_v1_pt:.5f} | v{v2} PT: μ={mean_v2_pt:.5f}, σ={std_v2_pt:.5f}", ha='center', fontsize=9)
+    # --- Plot 3 ---
+    fig = plt.figure(figsize=(6, 6))
+    plt.xscale('log')
+    plt.yscale('log')
+    for ssg in np.unique(ssg_type_array):
+        mask = ssg_type_array == ssg
+        plt.scatter(all_v1_v[mask], all_v2_v[mask], color=colors[ssg], label=labels[ssg])
+    plt.plot(all_v1_v, all_v1_v, linestyle='-', color='black')
+    plt.plot(all_v1_v, 2 * all_v1_v, linestyle='--', color='#808080')
+    plt.plot(all_v1_v, 0.5 * all_v1_v, linestyle='--', color='#808080')
+    plt.xlabel(f"v{v1} States")
+    plt.ylabel(f"v{v2} States")
+    plt.grid(True, which='major', ls='--')
+    plt.legend()
+    plt.title(f"States | v{v2} fewer states than v{v1} in {worse_v1_v_count / len(all_v1_v) * 100:.2f}%")
+    plt.tight_layout()
 
-    fig.tight_layout(rect=(0, 0.05, 1, 0.95))
-
-    if save_plots:
-        filename = f"{plot_name}_times_combined"
-        if use_global_path:
-            if os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename + ".png")):
-                i = 1
-                while os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i} + .png")):
-                    i += 1
-                filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i}")
-            else:
-                filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename)
-        fig.savefig(filename + ".png")
-
-    if not show_times:
-        plt.close(fig)
-
-    fig_stat, axs = plt.subplots(1, 2, figsize=(12, 6), num=plot_name + "_stats_comparison")
-    fig_stat.suptitle("Combined Benchmark Graph Statistics (States vs. Transitions)")
-    # Plot: Vertices
-
-    axs[0].set_xscale('log')
-    axs[0].set_yscale('log')
-    for ssg_type in np.unique(ssg_type_array):
-        mask = ssg_type_array == ssg_type
-        axs[0].scatter(all_v1_v[mask], all_v2_v[mask], color=colors[ssg_type], label=labels[ssg_type])
-    axs[0].plot(all_v1_v, all_v1_v, linestyle='-', color='black', label=f'#s with v{v1} = #s with v{v2}')
-    axs[0].plot(all_v1_v, 2 * all_v1_v, linestyle='--', color='#808080')
-    axs[0].plot(all_v1_v, 0.5 * all_v1_v, linestyle='--', color='#808080')
-    axs[0].set_xlabel(f"v{v1} States")
-    axs[0].set_ylabel(f"v{v2} States")
-    axs[0].set_title(f"States | v{v2} less states than v{v1} in {worse_v1_v_count / len(all_v1_v) * 100:.2f}% of the cases")
-    axs[0].legend()
-    axs[0].grid(True, which='major', ls='--')
-
-    # Plot: Transitions
-    axs[1].set_xscale('log')
-    axs[1].set_yscale('log')
-    for ssg_type in np.unique(ssg_type_array):
-        mask = ssg_type_array == ssg_type
-        axs[1].scatter(all_v1_t[mask], all_v2_t[mask], color=colors[ssg_type], label=labels[ssg_type])
-    axs[1].plot(all_v1_t, all_v1_t, linestyle='-', color='black', label=f'#t with v{v1} = #t with v{v2}')
-    axs[1].plot(all_v1_t, 2 * all_v1_t, linestyle='--', color='#808080')
-    axs[1].plot(all_v1_t, 0.5 * all_v1_t, linestyle='--', color='#808080')
-    axs[1].set_xlabel(f"v{v1} Transitions")
-    axs[1].set_ylabel(f"v{v2} Transitions")
-    axs[1].set_title(f"Transitions | v{v2} less transitions than v{v1} in {worse_v1_t_count / len(all_v1_t) * 100:.2f}% of the cases")
-    axs[1].legend()
-    axs[1].grid(True, which='major', ls='--')
-
-    # --- Statistic Info ---
-    fig_stat.text(0.5, 0.01, f"v{v1} States: μ={mean_v1_v:.2f}, σ={std_v1_v:.2f} | v{v2} States: μ={mean_v2_v:.2f}, σ={std_v2_v:.2f} || v{v1} Transitions: μ={mean_v1_t:.2f}, σ={std_v1_t:.2f} | v{v2} Transitions: μ={mean_v2_t:.2f}, σ={std_v2_t:.2f}", ha='center', fontsize=9)
-
-    fig_stat.tight_layout(rect=(0, 0.05, 1, 0.95))
-    if save_plots:
-        filename = f"{plot_name}_stats_combined"
-        if use_global_path:
-            if os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename + ".png")):
-                i = 1
-                while os.path.exists(os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i} + .png")):
-                    i += 1
-                filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", f"{filename}_{i}")
-            else:
-                filename = os.path.join(GLOBAL_IN_OUT_PATH, "benchmarks", filename)
-        fig_stat.savefig(filename + ".png")
-
-    if not show_stats:
-        plt.close(fig_stat)
-
-    if show_times or show_stats:
-        plt.show()
-
+    # --- Plot 4 ---
+    fig = plt.figure(figsize=(6, 6))
+    plt.xscale('log')
+    plt.yscale('log')
+    for ssg in np.unique(ssg_type_array):
+        mask = ssg_type_array == ssg
+        plt.scatter(all_v1_t[mask], all_v2_t[mask], color=colors[ssg], label=labels[ssg])
+    plt.plot(all_v1_t, all_v1_t, linestyle='-', color='black')
+    plt.plot(all_v1_t, 2 * all_v1_t, linestyle='--', color='#808080')
+    plt.plot(all_v1_t, 0.5 * all_v1_t, linestyle='--', color='#808080')
+    plt.xlabel(f"v{v1} Transitions")
+    plt.ylabel(f"v{v2} Transitions")
+    plt.grid(True, which='major', ls='--')
+    plt.legend()
+    plt.title(f"Transitions | v{v2} fewer transitions than v{v1} in {worse_v1_t_count / len(all_v1_t) * 100:.2f}%")
+    plt.tight_layout()
+    plt.show()
 
 def main():
     """
     Adjustable main function that is executed when the script is run.
     """
-    list_of_benchmark_results = [(benchmark_exponential_ssgs(ssg_type="random", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True))]
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="random_no_additional_selfloops", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="binary", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="complete", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="chain", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
-    list_of_benchmark_results.append((benchmark_exponential_ssgs(ssg_type="empty", time_per_iteration=1200, save_results=True, use_global_path=True, force=True, debug=True)))
-    plot_combined_benchmark_results(list_of_benchmark_results, show_times=True, show_stats=True, plot_name="test_benchmark_exponential_combined", save_plots=True, use_global_path=True, versions=(1, 2))
+    list_of_benchmark_results = [read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_random_max_1200.txt", False)]
+    # list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_random_no_additional_selfloops_max_1200.txt", False))
+    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_binary_max_1200.txt", False))
+    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_complete_max_1200.txt", False))
+    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_chain_max_1200.txt", False))
+    list_of_benchmark_results.append(read_benchmark_results("C:\\Uni_Zeug\\6.Semester\\Bachelorarbeit\\benchmark_results\\v1_v3_comparison\\benchmark_results_exponential_empty_max_1200.txt", False))
+    plot_combined_benchmark_results(list_of_benchmark_results, show_times=True, show_stats=True, plot_name="test_benchmark_exponential_combined", save_plots=True, use_global_path=True, versions=(1, 3))
 
 
 if __name__ == '__main__':

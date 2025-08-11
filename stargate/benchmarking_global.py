@@ -2,6 +2,7 @@
 import math
 import queue as pyqueue
 import random
+import threading
 import time
 import json
 import os
@@ -1334,29 +1335,29 @@ def benchmark_stargate(epsilons: list[float], prism_algorithms: list[str], save_
         ax.scatter(x_vals, y_vals, label=f"SPG Size = {vc}", color=vertex_color_map[vc], alpha=0.7)
 
     line_x = np.linspace(2, red_line_limit, 100)
-    ax.plot(line_x, line_x, linestyle='-', color='black', label="Equal Time")
+    ax.plot(line_x, line_x, linestyle='-', color='black')
     ax.plot(line_x, 2 * line_x, linestyle='--', color='gray')
     ax.plot(line_x, 0.5 * line_x, linestyle='--', color='gray')
     ax.axhline(red_line_limit, color='red', linestyle=':', linewidth=1.5, label="Timeout of 600s")
     ax.axvline(red_line_limit, color='red', linestyle=':', linewidth=1.5)
+    ax.axhline(error_display_value, color='red', linestyle='-', linewidth=1.5, label="Error")
+    ax.axvline(error_display_value, color='red', linestyle='-', linewidth=1.5)
+
 
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlabel("Value Iteration Time [s]")
     ax.set_ylabel("Policy Iteration Time [s]")
 
-    policy_better_count = sum(1 for x, y, _, _, _ in comparison_points if y < x)
-    total_count = len(comparison_points)
-    percent_policy_better = (policy_better_count / total_count) * 100 if total_count > 0 else 0
-    ax.set_title(f"Policy vs Value Iteration\nPolicy faster in {percent_policy_better:.2f}% of cases")
+    ax.set_title(f"Value Iteration vs. Policy Iteration")
 
     only_valiter_error = sum(1 for _, _, _, rx, ry in comparison_points if rx == -1.0 and ry != -1.0)
     only_politer_error = sum(1 for _, _, _, rx, ry in comparison_points if ry == -1.0 and rx != -1.0)
     both_error = sum(1 for _, _, _, rx, ry in comparison_points if rx == -1.0 and ry == -1.0)
     error_text = (
-        f"Only Value Iteration failed: {only_valiter_error}    "
-        f"Only Policy Iteration failed: {only_politer_error}    "
-        f"Both failed: {both_error}"
+        f"Error for only Value Iteration: {only_valiter_error}    "
+        f"Error for only Policy Iteration: {only_politer_error}    "
+        f"Error for both: {both_error}"
     )
     ax.text(0.5, -0.25, error_text, transform=ax.transAxes,
             ha='center', va='top', fontsize=10)
@@ -1386,9 +1387,16 @@ def benchmark_stargate(epsilons: list[float], prism_algorithms: list[str], save_
     ax2.grid(True, which='major', linestyle='--')
 
     handles_eps = [
-        plt.Line2D([0], [0], marker='o', color='w',
-                   label=f"ε={eps}" if eps is not None else "ε=None",
-                   markerfacecolor=col, markersize=8)
+        plt.Line2D(
+            [0], [0],
+            marker='o',
+            linestyle='',
+            markerfacecolor=col,
+            markeredgecolor=col,
+            markersize=8,
+            alpha=0.7,
+            label=f"ε={eps}" if eps is not None else "ε=None"
+        )
         for eps, col in epsilon_color_map.items()
     ]
     ax2.legend(handles=handles_eps, title="Epsilon (ε)", bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -1426,6 +1434,10 @@ def main():
     # prism_algorithm = ["-valiter", "-politer"]
     benchmark_stargate([None, 1e-6, 1e-2, 1e-1], ["-valiter", "-politer"], True)
     # benchmark_chain_spgs_for_correctness(True, True)
+    # benchmark_own_examples_for_correctness(["raphael2.spg", "raphael3.spg"], [(0, 0.25), (0, 0.333333)], True, False)
+    # benchmark_mutex_spg_for_correctness(True, False)
+    # benchmark_frozen_lake(timeout=3600, abort_when_alpha_underflow=False, use_global_path = True, debug=False)
+
 
 if __name__ == '__main__':
     import multiprocessing
